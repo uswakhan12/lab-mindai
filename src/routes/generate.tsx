@@ -113,7 +113,7 @@ function GeneratePage() {
                 onComplete={() => advance(3)}
               />
             )}
-            {activeStage === 3 && <Stage3Plan key="stage-3" />}
+            {activeStage === 3 && <Stage3Plan key="stage-3" hypothesis={hypothesis} />}
           </div>
 
           <div className="mt-10 text-center">
