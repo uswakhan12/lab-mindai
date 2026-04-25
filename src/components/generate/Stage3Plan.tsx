@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import type { FullPlan } from "@/types/plan";
 import { generateMockPlan } from "@/lib/plan-generator";
 import { addToHistory } from "@/lib/storage";
-import { PlanView } from "./PlanView";
+import { PlanView } from "@/components/plan/PlanView";
 
 const LOADING_STEPS = [
   "📚 Searching PubMed for related protocols...",
