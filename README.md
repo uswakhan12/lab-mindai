@@ -39,23 +39,29 @@ git clone <your-repo-url>
 cd lab-mindai
 ```
 
-2. Install dependencies:
+2. Move into the frontend app:
+
+```bash
+cd frontend
+```
+
+3. Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Start the development server:
+4. Start the development server:
 
 ```bash
 npm run dev
 ```
 
-4. Open the app in your browser (usually):
+5. Open the app in your browser (usually):
 
 - http://localhost:5173
 
-## Available Scripts
+## Frontend Scripts
 
 - `npm run dev` - Start local development server
 - `npm run build` - Build production bundle
@@ -68,15 +74,17 @@ npm run dev
 
 ```text
 .
-├── src/
-│   ├── components/        # UI and feature components
-│   ├── lib/               # Core client logic (plan generation, storage helpers)
-│   ├── routes/            # File-based routes (index, generate, root)
-│   ├── types/             # Shared TypeScript types
-│   ├── router.tsx         # Router setup and default error UI
-│   └── routeTree.gen.ts   # Generated route tree
-├── vite.config.ts
-├── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── components/        # UI and feature components
+│   │   ├── lib/               # Core client logic (plan generation, storage helpers)
+│   │   ├── routes/            # File-based routes (index, generate, root)
+│   │   ├── types/             # Shared TypeScript types
+│   │   ├── router.tsx         # Router setup and default error UI
+│   │   └── routeTree.gen.ts   # Generated route tree
+│   ├── package.json
+│   └── vite.config.ts
+├── backend/
 └── README.md
 ```
 
@@ -84,19 +92,20 @@ npm run dev
 
 - Data is stored in browser `localStorage` only (history/reviews).
 - Because the plan generator is mocked, outputs are deterministic and do not require network calls.
-- If you later add a real AI backend, replace the mock generation logic in `src/lib/plan-generator.ts`.
+- If you later add a real AI backend, replace the mock generation logic in `frontend/src/lib/plan-generator.ts`.
 
 ## Troubleshooting
 
-- If `npm run dev` fails due to port conflicts, run:
+- If `npm run dev` fails due to port conflicts, run from `frontend`:
 
 ```bash
-npm run dev -- --port 5174
+cd frontend && npm run dev -- --port 5174
 ```
 
-- If dependencies fail to install, remove lockfile and reinstall:
+- If frontend dependencies fail to install:
 
 ```bash
+cd frontend
 rm -rf node_modules package-lock.json
 npm install
 ```
