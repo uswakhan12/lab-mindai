@@ -660,6 +660,7 @@ erDiagram
 - Express `try/catch` per route with JSON `{ error, requestId?, details? }`.
 - Frontend: error boundaries / toast patterns depend on route implementation — see `router.tsx` and stage components for user-visible failures.
 - Model **429** handling with selective backoff parsing in `server.js` (`parse429SuggestedWaitMs`).
+- Stage 3 plan generation can fail when upstream API quota is exhausted (`429`) or model/retrieval services are unavailable; the UI then offers **Use mock plan anyway**. Expect roughly **7-8 seconds** before that fallback appears because Stage 3 first runs the loading sequence before surfacing the fallback path.
 
 ---
 
@@ -726,6 +727,7 @@ erDiagram
 | `502` All models failed (strict) | Groq + Gemini both down | Check keys, quotas, model IDs. |
 | `422` procurement / governance / safety (strict) | Gate failed | Inspect response `errors` / `warnings`; widen retrieval or fix hypothesis scope. |
 | Stage 3 empty or generic | Keys missing or resilient stub | Check `metadata.planningModel` and `releaseDegraded`. |
+| Stage 3 fails when APIs are rate-limited / down | Upstream quota reached or service outage | Wait for the Stage 3 loading cycle (~7-8s), then click **Use mock plan anyway** to generate a fallback mock plan and continue demoing the app. |
 | UI crash on reasoning | Stale cached plan without `reasoning` | Regenerate plan; backend now normalises `plan.reasoning`. |
 | Postgres connection errors | Wrong `DATABASE_URL` | Match `docker-compose.yml` credentials. |
 | Playwright fails to start | Port 4173 busy / server | Set `PLAYWRIGHT_BASE_URL` or free port per `playwright.config.ts`. |
