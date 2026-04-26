@@ -1,5 +1,10 @@
 import { useState } from "react";
-import type { ExecutionReadiness, FullPlan, QualityChecks, ScientificMechanistic } from "@/types/plan";
+import type {
+  ExecutionReadiness,
+  FullPlan,
+  QualityChecks,
+  ScientificMechanistic,
+} from "@/types/plan";
 import { Badge } from "@/components/ui/badge";
 import { OverviewTab } from "./OverviewTab";
 import { ProtocolTab } from "./ProtocolTab";
@@ -7,20 +12,50 @@ import { MaterialsTab } from "./MaterialsTab";
 import { BudgetTab, TimelineTab, ValidationTab, SafetyTab, ReasoningPanel } from "./PlanSections";
 import { ScientistReviewPanel } from "./ScientistReviewPanel";
 import { Button } from "@/components/ui/button";
-import { Download, Link2, FileText, ClipboardList, Package, DollarSign, Calendar, CheckCircle2, ShieldAlert, Sparkles } from "lucide-react";
+import {
+  Download,
+  Link2,
+  FileText,
+  ClipboardList,
+  Package,
+  DollarSign,
+  Calendar,
+  CheckCircle2,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 import { encodeHypothesis, getReviewsForDomain } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
-type TabId = "overview" | "protocol" | "materials" | "budget" | "timeline" | "validation" | "safety";
+type TabId =
+  | "overview"
+  | "protocol"
+  | "materials"
+  | "budget"
+  | "timeline"
+  | "validation"
+  | "safety";
 interface ModelFlow {
   retrievalModel?: string;
   planningModel?: string;
+  retrievalOutlineUsed?: boolean;
+}
+interface IncorporationReportRow {
+  index?: number;
+  sourceHypothesis?: string;
+  domain?: string;
+  overallRating?: number;
+  reviewerExpertise?: string;
+  corrections?: { section: string; excerpt: string }[];
+  issues?: { section: string; excerpt: string }[];
+  promptInclusion?: string;
 }
 interface FeedbackSummary {
   priorFeedbackCount?: number;
   appliedHighlights?: string[];
   feedbackMatch?: { method: string; ontologyTags: string[]; similarReviewCount: number };
+  incorporationReport?: IncorporationReportRow[];
 }
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -83,16 +118,29 @@ export function PlanView({
               <span className="font-mono text-foreground">{modelFlow.planningModel}</span>
               {modelFlow.retrievalModel ? (
                 <>
-                  {" "}· retrieval{" "}
+                  {" "}
+                  · retrieval{" "}
                   <span className="font-mono text-foreground">{modelFlow.retrievalModel}</span>
                 </>
+              ) : null}
+              {modelFlow.retrievalOutlineUsed ? (
+                <span className="text-emerald-400/90">
+                  {" "}
+                  · Llama 8B retrieval outline merged into planner
+                </span>
               ) : null}
             </p>
           )}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={copyLink}><Link2 className="h-4 w-4 mr-2" />Copy Link</Button>
-          <Button size="sm" onClick={downloadPDF} className="bg-primary-gradient"><Download className="h-4 w-4 mr-2" />Download PDF</Button>
+          <Button variant="outline" size="sm" onClick={copyLink}>
+            <Link2 className="h-4 w-4 mr-2" />
+            Copy Link
+          </Button>
+          <Button size="sm" onClick={downloadPDF} className="bg-primary-gradient">
+            <Download className="h-4 w-4 mr-2" />
+            Download PDF
+          </Button>
         </div>
       </div>
 
@@ -101,7 +149,8 @@ export function PlanView({
           data-testid="execution-readiness-panel"
           className={cn(
             "rounded-xl border p-4 space-y-3",
-            executionReadiness.tier === "order_ready" && "border-emerald-500/45 bg-emerald-500/[0.08]",
+            executionReadiness.tier === "order_ready" &&
+              "border-emerald-500/45 bg-emerald-500/[0.08]",
             executionReadiness.tier === "pilot_ready" && "border-amber-500/45 bg-amber-500/[0.08]",
             executionReadiness.tier === "draft" && "border-rose-500/40 bg-rose-500/[0.06]",
           )}
@@ -116,19 +165,25 @@ export function PlanView({
                 {executionReadiness.scoreOutOf10.toFixed(1)}
                 <span className="text-base font-normal text-muted-foreground"> / 10</span>
               </p>
-              <p className="text-sm text-foreground/90 mt-1 max-w-2xl leading-relaxed">{executionReadiness.headline}</p>
+              <p className="text-sm text-foreground/90 mt-1 max-w-2xl leading-relaxed">
+                {executionReadiness.headline}
+              </p>
               <p className="text-xs text-muted-foreground mt-2">
-                {executionReadiness.summary.passedChecks}/{executionReadiness.summary.totalChecks} automated checks ·{" "}
-                {executionReadiness.summary.protocolSteps} protocol steps · {executionReadiness.summary.materialLines}{" "}
-                material lines · {executionReadiness.summary.validatedSourceSections} sections with validated sources
+                {executionReadiness.summary.passedChecks}/{executionReadiness.summary.totalChecks}{" "}
+                automated checks · {executionReadiness.summary.protocolSteps} protocol steps ·{" "}
+                {executionReadiness.summary.materialLines} material lines ·{" "}
+                {executionReadiness.summary.validatedSourceSections} sections with validated sources
               </p>
             </div>
             <Badge
               className={cn(
                 "shrink-0 border text-xs uppercase tracking-wide",
-                executionReadiness.tier === "order_ready" && "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
-                executionReadiness.tier === "pilot_ready" && "bg-amber-500/20 text-amber-100 border-amber-500/40",
-                executionReadiness.tier === "draft" && "bg-rose-500/15 text-rose-100 border-rose-500/35",
+                executionReadiness.tier === "order_ready" &&
+                  "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
+                executionReadiness.tier === "pilot_ready" &&
+                  "bg-amber-500/20 text-amber-100 border-amber-500/40",
+                executionReadiness.tier === "draft" &&
+                  "bg-rose-500/15 text-rose-100 border-rose-500/35",
               )}
             >
               {executionReadiness.tier === "order_ready"
@@ -140,8 +195,13 @@ export function PlanView({
           </div>
           <ul className="grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2">
             {executionReadiness.checklist.map((c) => (
-              <li key={c.id} className="flex gap-2 items-start rounded-lg bg-card/40 border border-border/60 px-2.5 py-1.5">
-                <span className={cn("shrink-0 font-mono", c.ok ? "text-emerald-400" : "text-amber-400")}>
+              <li
+                key={c.id}
+                className="flex gap-2 items-start rounded-lg bg-card/40 border border-border/60 px-2.5 py-1.5"
+              >
+                <span
+                  className={cn("shrink-0 font-mono", c.ok ? "text-emerald-400" : "text-amber-400")}
+                >
                   {c.ok ? "✓" : "!"}
                 </span>
                 <span className="leading-snug">{c.detail}</span>
@@ -153,19 +213,37 @@ export function PlanView({
 
       {/* Demo banner if prior feedback exists */}
       {priorReviews.length > 0 && (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3" data-print-hide>
+        <div
+          className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3"
+          data-print-hide
+        >
           <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-          <p className="text-sm">💡 This plan was improved by <strong>{priorReviews.length} scientist review{priorReviews.length === 1 ? "" : "s"}</strong> from similar experiments in this domain.</p>
+          <p className="text-sm">
+            💡 This plan was improved by{" "}
+            <strong>
+              {priorReviews.length} scientist review{priorReviews.length === 1 ? "" : "s"}
+            </strong>{" "}
+            from similar experiments in this domain.
+          </p>
         </div>
       )}
 
       {!!feedbackSummary?.feedbackMatch && (
-        <div className="rounded-xl border border-border bg-card/50 p-4 text-sm space-y-1" data-print-hide>
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary">Feedback retrieval</p>
+        <div
+          className="rounded-xl border border-border bg-card/50 p-4 text-sm space-y-1"
+          data-print-hide
+        >
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+            Feedback retrieval
+          </p>
           <p className="text-muted-foreground">
-            Method: <span className="font-mono text-foreground">{feedbackSummary.feedbackMatch.method}</span>
+            Method:{" "}
+            <span className="font-mono text-foreground">
+              {feedbackSummary.feedbackMatch.method}
+            </span>
             {" · "}
-            Matched <strong>{feedbackSummary.feedbackMatch.similarReviewCount}</strong> similar review(s) by ontology + keywords.
+            Matched <strong>{feedbackSummary.feedbackMatch.similarReviewCount}</strong> similar
+            review(s) by ontology + keywords.
           </p>
           <p className="text-xs text-muted-foreground">
             Tags:{" "}
@@ -177,10 +255,18 @@ export function PlanView({
       )}
 
       {!!feedbackSummary?.appliedHighlights?.length && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2" data-print-hide>
+        <div
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2"
+          data-print-hide
+        >
           <p className="text-sm font-medium text-emerald-100">
-            Applied prior feedback from {feedbackSummary.priorFeedbackCount || feedbackSummary.appliedHighlights.length} similar review
-            {(feedbackSummary.priorFeedbackCount || feedbackSummary.appliedHighlights.length) === 1 ? "" : "s"}:
+            Applied prior feedback from{" "}
+            {feedbackSummary.priorFeedbackCount || feedbackSummary.appliedHighlights.length} similar
+            review
+            {(feedbackSummary.priorFeedbackCount || feedbackSummary.appliedHighlights.length) === 1
+              ? ""
+              : "s"}
+            :
           </p>
           <ul className="text-sm text-emerald-50/90 space-y-1 list-disc pl-5">
             {feedbackSummary.appliedHighlights.map((item, idx) => (
@@ -190,18 +276,82 @@ export function PlanView({
         </div>
       )}
 
+      {!!feedbackSummary?.incorporationReport?.length && (
+        <details className="rounded-xl border border-border bg-card/50 p-4 text-sm" data-print-hide>
+          <summary className="cursor-pointer font-medium text-foreground">
+            Learning loop — what was injected into this generation
+          </summary>
+          <div className="mt-3 space-y-4 text-muted-foreground">
+            {feedbackSummary.incorporationReport.map((row) => (
+              <div
+                key={row.index}
+                className="rounded-lg border border-border/70 bg-background/30 p-3 space-y-2"
+              >
+                <p className="text-xs text-foreground/80">
+                  Review <span className="font-mono">#{row.index}</span>
+                  {row.domain ? ` · domain ${row.domain}` : ""}
+                  {row.overallRating != null ? ` · rating ${row.overallRating}/5` : ""}
+                  {row.reviewerExpertise ? ` · ${row.reviewerExpertise}` : ""}
+                </p>
+                {row.sourceHypothesis ? (
+                  <p className="text-xs italic text-muted-foreground/90">
+                    “{row.sourceHypothesis}…”
+                  </p>
+                ) : null}
+                {row.corrections && row.corrections.length > 0 ? (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-primary mb-1">
+                      Corrections passed to prompt
+                    </p>
+                    <ul className="text-xs space-y-1 list-disc pl-4">
+                      {row.corrections.map((c, i) => (
+                        <li key={i}>
+                          <span className="text-foreground/90">{c.section}:</span> {c.excerpt}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {row.issues && row.issues.length > 0 ? (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-amber-400/90 mb-1">
+                      Flagged issues
+                    </p>
+                    <ul className="text-xs space-y-1 list-disc pl-4">
+                      {row.issues.map((c, i) => (
+                        <li key={i}>
+                          <span className="text-foreground/90">{c.section}:</span> {c.excerpt}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {row.promptInclusion ? (
+                  <p className="text-[11px] text-muted-foreground/80">{row.promptInclusion}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
       {!!qualityChecks && (
         <div
           className={`rounded-xl border p-4 space-y-2 ${qualityChecks.gatesPassed ? "border-emerald-500/30 bg-emerald-500/5" : "border-rose-500/30 bg-rose-500/5"}`}
           data-print-hide
         >
           <p className="text-sm font-medium">
-            Judge quality score: <span className="font-mono">{qualityChecks.scoreOutOf10.toFixed(1)}/10</span>
+            Judge quality score:{" "}
+            <span className="font-mono">{qualityChecks.scoreOutOf10.toFixed(1)}/10</span>
             {" · "}
-            <span>{qualityChecks.gatesPassed ? "Quality gates passed" : "Quality gates failed"}</span>
+            <span>
+              {qualityChecks.gatesPassed ? "Quality gates passed" : "Quality gates failed"}
+            </span>
           </p>
           <p className="text-xs text-muted-foreground">
-            Completeness {qualityChecks.dimensions.completeness.toFixed(1)} · Evidence {qualityChecks.dimensions.evidenceGrounding.toFixed(1)} · Operational realism {qualityChecks.dimensions.operationalRealism.toFixed(1)}
+            Completeness {qualityChecks.dimensions.completeness.toFixed(1)} · Evidence{" "}
+            {qualityChecks.dimensions.evidenceGrounding.toFixed(1)} · Operational realism{" "}
+            {qualityChecks.dimensions.operationalRealism.toFixed(1)}
           </p>
         </div>
       )}
@@ -212,11 +362,15 @@ export function PlanView({
           data-print-hide
           data-testid="mechanistic-validation-panel"
         >
-          <summary className="cursor-pointer font-medium text-foreground">Mechanistic validation (concentrations · power sketch · step evidence)</summary>
+          <summary className="cursor-pointer font-medium text-foreground">
+            Mechanistic validation (concentrations · power sketch · step evidence)
+          </summary>
           <div className="mt-3 space-y-3 text-muted-foreground">
             <p className="text-xs leading-relaxed">{scientificMechanistic.disclaimer}</p>
             <div>
-              <p className="text-xs font-semibold text-primary mb-1">Assay / concentration checks</p>
+              <p className="text-xs font-semibold text-primary mb-1">
+                Assay / concentration checks
+              </p>
               <ul className="list-disc pl-4 space-y-1">
                 {scientificMechanistic.assayCompatibility.map((a, i) => (
                   <li key={i}>
@@ -226,14 +380,18 @@ export function PlanView({
               </ul>
             </div>
             <div>
-              <p className="text-xs font-semibold text-primary mb-1">Power sketch (hypothesis-derived)</p>
+              <p className="text-xs font-semibold text-primary mb-1">
+                Power sketch (hypothesis-derived)
+              </p>
               <pre className="text-[11px] font-mono whitespace-pre-wrap bg-card/60 border border-border rounded-md p-2 overflow-x-auto">
                 {JSON.stringify(scientificMechanistic.powerSketch, null, 2)}
               </pre>
             </div>
             <p className="text-xs">
               Protocol steps annotated with evidence links:{" "}
-              <strong className="text-foreground">{scientificMechanistic.protocolEvidence.stepsAnnotated}</strong>
+              <strong className="text-foreground">
+                {scientificMechanistic.protocolEvidence.stepsAnnotated}
+              </strong>
             </p>
           </div>
         </details>
@@ -241,9 +399,16 @@ export function PlanView({
 
       {/* Mobile tabs (dropdown) */}
       <div className="md:hidden" data-print-hide>
-        <select value={tab} onChange={(e) => setTab(e.target.value as TabId)}
-          className="w-full bg-input border border-border rounded-lg px-3 py-2.5 font-medium">
-          {TABS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        <select
+          value={tab}
+          onChange={(e) => setTab(e.target.value as TabId)}
+          className="w-full bg-input border border-border rounded-lg px-3 py-2.5 font-medium"
+        >
+          {TABS.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -256,11 +421,16 @@ export function PlanView({
               const Icon = t.icon;
               const active = t.id === tab;
               return (
-                <button key={t.id} onClick={() => setTab(t.id)}
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
                   className={cn(
                     "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all text-left",
-                    active ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground hover:bg-card/50",
-                  )}>
+                    active
+                      ? "bg-primary/15 text-primary border border-primary/30"
+                      : "text-muted-foreground hover:text-foreground hover:bg-card/50",
+                  )}
+                >
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="truncate">{t.label}</span>
                 </button>
@@ -280,7 +450,11 @@ export function PlanView({
             </p>
           </div>
           {tab === "overview" && (
-            <OverviewTab plan={plan} hypothesis={hypothesis} executionReadiness={executionReadiness} />
+            <OverviewTab
+              plan={plan}
+              hypothesis={hypothesis}
+              executionReadiness={executionReadiness}
+            />
           )}
           {tab === "protocol" && <ProtocolTab plan={plan} />}
           {tab === "materials" && <MaterialsTab plan={plan} />}
@@ -295,14 +469,36 @@ export function PlanView({
       <div data-print-only className="space-y-8 hidden">
         <section data-print-section>
           <h2>Overview</h2>
-          <OverviewTab plan={plan} hypothesis={hypothesis} executionReadiness={executionReadiness} />
+          <OverviewTab
+            plan={plan}
+            hypothesis={hypothesis}
+            executionReadiness={executionReadiness}
+          />
         </section>
-        <section data-print-section><h2>Protocol</h2><ProtocolTab plan={plan} /></section>
-        <section data-print-section><h2>Materials</h2><MaterialsTab plan={plan} /></section>
-        <section data-print-section><h2>Budget</h2><BudgetTab plan={plan} /></section>
-        <section data-print-section><h2>Timeline</h2><TimelineTab plan={plan} /></section>
-        <section data-print-section><h2>Validation</h2><ValidationTab plan={plan} /></section>
-        <section data-print-section><h2>Safety</h2><SafetyTab plan={plan} /></section>
+        <section data-print-section>
+          <h2>Protocol</h2>
+          <ProtocolTab plan={plan} />
+        </section>
+        <section data-print-section>
+          <h2>Materials</h2>
+          <MaterialsTab plan={plan} />
+        </section>
+        <section data-print-section>
+          <h2>Budget</h2>
+          <BudgetTab plan={plan} />
+        </section>
+        <section data-print-section>
+          <h2>Timeline</h2>
+          <TimelineTab plan={plan} />
+        </section>
+        <section data-print-section>
+          <h2>Validation</h2>
+          <ValidationTab plan={plan} />
+        </section>
+        <section data-print-section>
+          <h2>Safety</h2>
+          <SafetyTab plan={plan} />
+        </section>
       </div>
 
       <ReasoningPanel plan={plan} />

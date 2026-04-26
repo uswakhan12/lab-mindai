@@ -20,6 +20,31 @@ export interface Reference {
   year: number;
   doi: string;
   relevance: string;
+  url?: string;
+  score?: number;
+  validationStatus?: "validated" | "weak_match";
+  confidence?: number;
+}
+
+/** Server-side defensible tiering beyond noveltySignal alone. */
+export interface NoveltyDiagnostics {
+  version: number;
+  evidenceTier: string;
+  noveltySignal: NoveltySignal;
+  topRetrievalScore: number;
+  topHypothesisOverlap: number;
+  hasProtocolRepositoryHit: boolean;
+  hasVendorOrResourceHit: boolean;
+  rulesTriggered: string[];
+  signalAlignmentNote: string;
+  perReference: Array<{
+    index: number;
+    title: string;
+    url: string;
+    retrievalScore: number;
+    hypothesisTokenOverlap: number;
+    hostKind: string;
+  }>;
 }
 
 /** Live web hit used to cross-check plan assumptions (from Tavily). */
@@ -39,12 +64,15 @@ export type PlanVerificationSection =
   | "validation"
   | "safety";
 
-export type PlanVerificationSources = Partial<Record<PlanVerificationSection, VerificationSource[]>>;
+export type PlanVerificationSources = Partial<
+  Record<PlanVerificationSection, VerificationSource[]>
+>;
 
 export interface LiteratureQC {
   noveltySignal: NoveltySignal;
   noveltyExplanation: string;
   references: Reference[];
+  noveltyDiagnostics?: NoveltyDiagnostics;
 }
 
 /** Per-step link to literature QC or verification URLs (claim-level grounding). */
@@ -64,12 +92,21 @@ export interface ProtocolStep {
   durationHours: number;
   safetyWarnings: string[];
   criticalNotes: string[];
+  /** Index into literatureQC.references from the same plan (retrieval grounding). */
+  literatureRefIndex?: number;
   evidenceLinks?: StepEvidenceLink[];
 }
 
 export interface ProtocolPhase {
   phaseName: string;
   steps: ProtocolStep[];
+}
+
+export interface MaterialGrounding {
+  sourceUrl: string;
+  sourceTitle?: string;
+  evidenceNote?: string;
+  confidence?: "High" | "Medium" | "Low";
 }
 
 export interface Material {
@@ -82,6 +119,7 @@ export interface Material {
   totalCostUSD: number;
   category: MaterialCategory;
   leadTimeWeeks: number;
+  grounding?: MaterialGrounding;
 }
 
 export interface BudgetBreakdown {

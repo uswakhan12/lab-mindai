@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ExecutionReadiness, FullPlan, QualityChecks, ScientificMechanistic } from "@/types/plan";
+import type {
+  ExecutionReadiness,
+  FullPlan,
+  QualityChecks,
+  ScientificMechanistic,
+} from "@/types/plan";
 import { detectDomain, generateMockPlan } from "@/lib/plan-generator";
-import { addToHistory, fetchReviewsForDomain, getReviewsForDomain, labmindApiHeaders } from "@/lib/storage";
+import {
+  addToHistory,
+  fetchReviewsForDomain,
+  getReviewsForDomain,
+  labmindApiHeaders,
+} from "@/lib/storage";
 import { fetchPlanVerificationSources } from "@/lib/fetch-plan-sources";
 import { PlanView } from "@/components/plan/PlanView";
 
@@ -21,6 +31,7 @@ const LOADING_STEPS = [
 interface ModelFlow {
   retrievalModel?: string;
   planningModel?: string;
+  retrievalOutlineUsed?: boolean;
 }
 
 interface FeedbackSummary {
@@ -29,9 +40,7 @@ interface FeedbackSummary {
   feedbackMatch?: { method: string; ontologyTags: string[]; similarReviewCount: number };
 }
 
-async function fetchModelGeneratedPlan(
-  hypothesis: string,
-): Promise<{
+async function fetchModelGeneratedPlan(hypothesis: string): Promise<{
   plan: FullPlan;
   modelFlow?: ModelFlow;
   feedbackSummary?: FeedbackSummary;
@@ -44,7 +53,11 @@ async function fetchModelGeneratedPlan(
   const remoteFeedback = await fetchReviewsForDomain(domain, 8);
   const deduped = [...localFeedback, ...remoteFeedback].filter((r, idx, arr) => {
     const signature = `${r.timestamp}-${r.originalPlanSummary}-${r.reviewerExpertise}`;
-    return arr.findIndex((x) => `${x.timestamp}-${x.originalPlanSummary}-${x.reviewerExpertise}` === signature) === idx;
+    return (
+      arr.findIndex(
+        (x) => `${x.timestamp}-${x.originalPlanSummary}-${x.reviewerExpertise}` === signature,
+      ) === idx
+    );
   });
   const priorFeedback = deduped.slice(0, 10).map((r) => ({
     domain: r.domain,
@@ -89,8 +102,12 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
   const [modelFlow, setModelFlow] = useState<ModelFlow | undefined>(undefined);
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary | undefined>(undefined);
   const [qualityChecks, setQualityChecks] = useState<QualityChecks | undefined>(undefined);
-  const [scientificMechanistic, setScientificMechanistic] = useState<ScientificMechanistic | undefined>(undefined);
-  const [executionReadiness, setExecutionReadiness] = useState<ExecutionReadiness | undefined>(undefined);
+  const [scientificMechanistic, setScientificMechanistic] = useState<
+    ScientificMechanistic | undefined
+  >(undefined);
+  const [executionReadiness, setExecutionReadiness] = useState<ExecutionReadiness | undefined>(
+    undefined,
+  );
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
@@ -183,9 +200,13 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
       </div>
       <div className="space-y-2.5">
         {LOADING_STEPS.slice(0, stepIdx + 1).map((s, i) => (
-          <div key={i}
-            className={`flex items-center gap-2 text-sm animate-fade-in ${i === stepIdx ? "text-foreground" : "text-muted-foreground"}`}>
-            <span className={i < stepIdx ? "text-emerald-400" : ""}>{i < stepIdx ? "✓" : i === stepIdx ? "▸" : "·"}</span>
+          <div
+            key={i}
+            className={`flex items-center gap-2 text-sm animate-fade-in ${i === stepIdx ? "text-foreground" : "text-muted-foreground"}`}
+          >
+            <span className={i < stepIdx ? "text-emerald-400" : ""}>
+              {i < stepIdx ? "✓" : i === stepIdx ? "▸" : "·"}
+            </span>
             <span>{s}</span>
           </div>
         ))}

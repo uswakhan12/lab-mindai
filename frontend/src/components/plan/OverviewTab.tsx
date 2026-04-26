@@ -36,13 +36,18 @@ export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
       </div>
 
       {hasVerificationSources && (
-        <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm" data-print-card>
+        <div
+          className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm"
+          data-print-card
+        >
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1.5 flex items-center gap-2">
             <Info className="h-3.5 w-3.5 shrink-0" />
             Live verification (Tavily)
           </p>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Use the &quot;Verify this section&quot; blocks in Protocol, Materials, Budget, Timeline, Validation, and Safety to open independent web sources before you order reagents or lock in spend.
+            Use the &quot;Verify this section&quot; blocks in Protocol, Materials, Budget, Timeline,
+            Validation, and Safety to open independent web sources before you order reagents or lock
+            in spend.
           </p>
         </div>
       )}
@@ -73,7 +78,8 @@ export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
         <div
           className={cn(
             "rounded-xl border p-4 flex flex-wrap items-center gap-4",
-            executionReadiness.tier === "order_ready" && "border-emerald-500/35 bg-emerald-500/[0.06]",
+            executionReadiness.tier === "order_ready" &&
+              "border-emerald-500/35 bg-emerald-500/[0.06]",
             executionReadiness.tier === "pilot_ready" && "border-amber-500/35 bg-amber-500/[0.06]",
             executionReadiness.tier === "draft" && "border-border bg-card/30",
           )}
@@ -84,14 +90,18 @@ export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
               <ClipboardCheck className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">Procurement readiness</p>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                Procurement readiness
+              </p>
               <p className="text-xl font-semibold">
                 {executionReadiness.scoreOutOf10.toFixed(1)}
                 <span className="text-sm font-normal text-muted-foreground"> / 10</span>
               </p>
             </div>
           </div>
-          <p className="text-sm text-foreground/85 flex-1 min-w-[200px] leading-relaxed">{executionReadiness.headline}</p>
+          <p className="text-sm text-foreground/85 flex-1 min-w-[200px] leading-relaxed">
+            {executionReadiness.headline}
+          </p>
         </div>
       )}
 
@@ -119,17 +129,22 @@ export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
             <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
               {plan.hypothesisAnalysis.strengthScore}
             </Badge>
-            <span className="text-sm text-muted-foreground">{plan.hypothesisAnalysis.strengthReason}</span>
+            <span className="text-sm text-muted-foreground">
+              {plan.hypothesisAnalysis.strengthReason}
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex gap-3" data-print-card>
+      <div
+        className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex gap-3"
+        data-print-card
+      >
         <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
         <p className="text-sm text-amber-100/90 leading-relaxed">
-          <strong>Scientific honesty:</strong> All cost estimates reflect 2024-2025 supplier pricing —
-          verify current rates before procurement. Catalog numbers should be verified against current
-          supplier inventories. Timeline assumes standard institutional lab access.
+          <strong>Scientific honesty:</strong> All cost estimates reflect 2024-2025 supplier pricing
+          — verify current rates before procurement. Catalog numbers should be verified against
+          current supplier inventories. Timeline assumes standard institutional lab access.
         </p>
       </div>
     </div>
@@ -137,9 +152,17 @@ export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
 }
 
 function StatCard({
-  icon, label, value, sub, big = false,
+  icon,
+  label,
+  value,
+  sub,
+  big = false,
 }: {
-  icon: React.ReactNode; label: string; value: string; sub?: string; big?: boolean;
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+  big?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-border bg-card/60 backdrop-blur p-5" data-print-card>
@@ -147,7 +170,12 @@ function StatCard({
         {icon}
         <p className="text-xs uppercase tracking-widest">{label}</p>
       </div>
-      <p className={cn("font-display font-semibold tracking-tight", big ? "text-4xl text-gradient" : "text-2xl")}>
+      <p
+        className={cn(
+          "font-display font-semibold tracking-tight",
+          big ? "text-4xl text-gradient" : "text-2xl",
+        )}
+      >
         {value}
       </p>
       {sub && <p className="text-xs text-muted-foreground mt-2">{sub}</p>}

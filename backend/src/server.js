@@ -10,6 +10,10 @@ import {
 } from "./feedback-store.js";
 import { runScientificMechanisticValidation } from "./scientific-mechanistic.js";
 import { computeExecutionReadiness } from "./execution-readiness.js";
+import { buildNoveltyDiagnostics } from "./novelty-diagnostics.js";
+import { validatePlanGrounding } from "./grounding-validator.js";
+import { runOperationalExtraChecks } from "./operational-extra-checks.js";
+import { generatePlanOutline } from "./plan-outline.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -161,6 +165,16 @@ function buildNoveltyExplanation(signal, references) {
     return `An exact or near-exact protocol appears to exist (top result: ${references[0]?.title || "matched source"}).`;
   }
   return "Related studies exist, but no exact protocol match was found in this quick scan.";
+}
+
+function mergeReferenceScores(validatedRefs, qcResult) {
+  const orig = Array.isArray(qcResult?.references) ? qcResult.references : [];
+  return validatedRefs.map((r) => {
+    const u = String(r.url || "").trim();
+    const hit = orig.find((o) => String(o.url || "").trim() === u);
+    const score = typeof hit?.score === "number" && Number.isFinite(hit.score) ? hit.score : 0.62;
+    return { ...r, score };
+  });
 }
 
 function mapTavilyToQC(tavilyData) {
@@ -552,8 +566,35 @@ function formatPriorFeedbackForPrompt(items) {
   return lines.join("\n");
 }
 
-function buildPlanPrompt({ hypothesis, retrievalPacket }) {
+function buildIncorporationReport(allPriorFeedback) {
+  const list = Array.isArray(allPriorFeedback) ? allPriorFeedback : [];
+  return list.slice(0, 8).map((f, i) => ({
+    index: i,
+    sourceHypothesis: String(f?.hypothesis || "").slice(0, 200),
+    domain: f?.domain,
+    overallRating: f?.overallRating,
+    reviewerExpertise: f?.reviewerExpertise,
+    corrections: Object.entries(f?.corrections || {})
+      .filter(([, v]) => typeof v === "string" && v.trim().length > 0)
+      .map(([section, text]) => ({ section, excerpt: text.trim().slice(0, 280) })),
+    issues: Object.entries(f?.issues || {})
+      .filter(([, v]) => typeof v === "string" && v.trim().length > 0)
+      .map(([section, text]) => ({ section, excerpt: text.trim().slice(0, 220) })),
+    promptInclusion: "These rows were merged into the generation prompt for this request (sorted by correction weight).",
+  }));
+}
+
+function buildPlanPrompt({ hypothesis, retrievalPacket, outline }) {
   const priorBlock = formatPriorFeedbackForPrompt(retrievalPacket.priorFeedback || []);
+  const outlineBlock =
+    outline && typeof outline === "object"
+      ? `=== RETRIEVAL_OUTLINE (MANDATORY — expand, do not replace) ===
+A prior Llama 8B pass structured this experiment specifically from the retrieval packet. Preserve phase names and ordering; turn each stepTitles entry into one or more fully written protocol steps with durations and safety notes. If the outline conflicts with a generic template, the outline wins.
+
+${JSON.stringify(outline).slice(0, 14_000)}
+
+`
+      : "";
   return `You are generating a complete, operational experiment plan for real wet-lab execution.
 Return ONLY valid JSON object matching this shape (no markdown):
 {
@@ -577,8 +618,8 @@ Return ONLY valid JSON object matching this shape (no markdown):
     "totalDurationDays":0,
     "difficultyLevel":"Beginner|Intermediate|Advanced",
     "expertiseTags":["string"],
-    "protocol":{"phases":[{"phaseName":"string","steps":[{"stepNumber":1,"title":"string","description":"string","durationHours":1,"safetyWarnings":["string"],"criticalNotes":["string"]}]}]},
-    "materials":[{"item":"string","specification":"string","quantity":"string","supplier":"string","catalogNumber":"string","unitPriceUSD":0,"totalCostUSD":0,"category":"Reagent|Equipment|Consumable","leadTimeWeeks":0}],
+    "protocol":{"phases":[{"phaseName":"string","steps":[{"stepNumber":1,"title":"string","description":"string","durationHours":1,"safetyWarnings":["string"],"criticalNotes":["string"],"literatureRefIndex":0}]}]},
+    "materials":[{"item":"string","specification":"string","quantity":"string","supplier":"string","catalogNumber":"string","unitPriceUSD":0,"totalCostUSD":0,"category":"Reagent|Equipment|Consumable","leadTimeWeeks":0,"grounding":{"sourceUrl":"EXACT url copied from retrieval packet literatureQC.references[].url OR the literal PENDING","sourceTitle":"string","evidenceNote":"<=140 chars: why this ref supports the line","confidence":"High|Medium|Low"}}],
     "budget":{"byCategory":[{"category":"string","amountUSD":0}],"contingencyPercent":10,"totalWithContingencyUSD":0},
     "timeline":{"phases":[{"name":"string","startDay":0,"endDay":0,"type":"preparation|treatment|analysis|measurement","dependencies":["string"]}]},
     "validation":{"successMetrics":["string"],"statisticalPlan":"string","sampleSize":"string","controls":{"positive":"string","negative":"string"},"failureModes":[{"mode":"string","earlyDetection":"string"}],"qcCheckpoints":["string"]},
@@ -603,7 +644,10 @@ Constraints:
 - Keep references and verificationSources grounded in retrieval packet.
 - Include explicit safety and compliance notes (IRB/IBC/ethics approvals) whenever work could involve biosafety or human/animal subjects.
 - When describing methodology, bias toward established protocol literature (protocols.io, Bio-protocol, Nature Protocols, peer-reviewed methods, vendor protocols) already present in the retrieval packet — do not invent DOIs or URLs.
+- Each protocol step MUST include literatureRefIndex: 0, 1, or 2 pointing at which retrieval packet reference (same order as literatureQC.references in the packet) most informs that step. If none apply, use 0 and explain limitation in criticalNotes.
+- Each material line MUST include grounding.sourceUrl either (a) an EXACT URL string copied from retrievalPacket.literatureQC.references[].url, or (b) the literal PENDING if only supplier pages will be validated later. Never invent URLs.
 
+${outlineBlock}
 === PRIOR SCIENTIST CORRECTIONS (MANDATORY) ===
 The bullets below come from past expert reviews of similar experiments (same tenant / domain). You MUST fold them into the JSON plan: update protocol steps, materials lines, budget assumptions, timeline slack, or validation metrics where they override generic defaults. If a corrected catalog number is not verifiable from the packet, keep the expert intent in criticalNotes and set catalogNumber to "VERIFY-CATALOG".
 
@@ -673,21 +717,24 @@ ${JSON.stringify(qcResult).slice(0, 45000)}
     return {
       noveltySignal: validated.noveltySignal || qcResult.noveltySignal,
       noveltyExplanation: validated.noveltyExplanation || qcResult.noveltyExplanation,
-      references: validated.references.map((r) => ({
-        validationStatus: r.validationStatus === "validated" ? "validated" : "weak_match",
-        title: r.title || "Untitled source",
-        authors: r.authors || "Source metadata unavailable",
-        journal: r.journal || "Web source",
-        year: Number.isFinite(Number(r.year)) ? Number(r.year) : new Date().getFullYear(),
-        doi: r.doi || "N/A",
-        relevance: r.relevance || "Relevance validated by Llama 8B.",
-        url: r.url || "#",
-        confidence: confidenceForStatus(
-          r.validationStatus === "validated" ? "validated" : "weak_match",
-          typeof r.confidence === "number" ? r.confidence : r.score,
-          0.6,
-        ),
-      })).slice(0, 3),
+      references: mergeReferenceScores(
+        validated.references.map((r) => ({
+          validationStatus: r.validationStatus === "validated" ? "validated" : "weak_match",
+          title: r.title || "Untitled source",
+          authors: r.authors || "Source metadata unavailable",
+          journal: r.journal || "Web source",
+          year: Number.isFinite(Number(r.year)) ? Number(r.year) : new Date().getFullYear(),
+          doi: r.doi || "N/A",
+          relevance: r.relevance || "Relevance validated by Llama 8B.",
+          url: r.url || "#",
+          confidence: confidenceForStatus(
+            r.validationStatus === "validated" ? "validated" : "weak_match",
+            typeof r.confidence === "number" ? r.confidence : r.score,
+            0.6,
+          ),
+        })).slice(0, 3),
+        qcResult,
+      ),
       modelFlow: {
         retrieval: "tavily",
         validator: validated.__validatorModel || llama8Model,
@@ -713,15 +760,17 @@ ${JSON.stringify(qcResult).slice(0, 45000)}
 
 async function buildLiteratureRetrievalPacket({ hypothesis, tavilyKey, llama8Model, priorFeedback = [] }) {
   if (!tavilyKey) {
+    const literatureQC = {
+      noveltySignal: "similar_exists",
+      noveltyExplanation:
+        "Literature retrieval unavailable at generation time. Run /api/literature-qc once retrieval keys are configured.",
+      references: [],
+    };
     return {
       retrievalSummary:
         "External retrieval unavailable because TAVILY_API_KEY is missing. Plan will use hypothesis and prior feedback.",
-      literatureQC: {
-        noveltySignal: "similar_exists",
-        noveltyExplanation:
-          "Literature retrieval unavailable at generation time. Run /api/literature-qc once retrieval keys are configured.",
-        references: [],
-      },
+      literatureQC,
+      noveltyDiagnostics: buildNoveltyDiagnostics(hypothesis, literatureQC.references, literatureQC.noveltySignal),
       modelFlow: {
         retrieval: "unavailable",
         validator: "unavailable",
@@ -733,6 +782,11 @@ async function buildLiteratureRetrievalPacket({ hypothesis, tavilyKey, llama8Mod
   const rawResults = await fetchMergedLiteratureRows(tavilyKey, hypothesis);
   const qcResult = mapTavilyToQC({ results: rawResults });
   const validatedQc = await validateLiteratureQcWithLlama({ hypothesis, qcResult, llama8Model });
+  const noveltyDiagnostics = buildNoveltyDiagnostics(
+    hypothesis,
+    validatedQc.references,
+    validatedQc.noveltySignal,
+  );
   return {
     retrievalSummary:
       "Plan generation is grounded in Tavily retrieval plus Llama 8B relevance validation before drafting.",
@@ -741,6 +795,7 @@ async function buildLiteratureRetrievalPacket({ hypothesis, tavilyKey, llama8Mod
       noveltyExplanation: validatedQc.noveltyExplanation,
       references: validatedQc.references,
     },
+    noveltyDiagnostics,
     modelFlow: validatedQc.modelFlow,
     priorFeedback,
   };
@@ -871,6 +926,20 @@ function evaluatePlanQuality({ hypothesis, plan }) {
   const normalizedEvidence = evidence.coveredCount / evidence.totalSections;
   if (evidence.coveredCount < 4) warnings.push("Verification evidence is sparse across plan sections.");
 
+  let stepsWithLitIdx = 0;
+  for (const ph of protocolPhases) {
+    for (const st of ph?.steps || []) {
+      if (Number.isInteger(st?.literatureRefIndex) && st.literatureRefIndex >= 0 && st.literatureRefIndex <= 2) {
+        stepsWithLitIdx += 1;
+      }
+    }
+  }
+  if (refs.length > 0 && totalProtocolSteps > 0 && stepsWithLitIdx < totalProtocolSteps * 0.45) {
+    warnings.push(
+      "Most protocol steps lack literatureRefIndex (0–2) pointing at retrieval references — weaker packet-to-protocol traceability.",
+    );
+  }
+
   const completenessScore = Math.max(0, 10 - errors.length * 2 - warnings.length * 0.5);
   const evidenceScore = Math.round(normalizedEvidence * 10 * 10) / 10;
   const operationalScore = Math.max(
@@ -985,7 +1054,12 @@ app.post("/api/literature-qc", requireLabmindApiKey, async (req, res) => {
 
     const llama8Model = process.env.LLAMA8_MODEL || "llama-3.1-8b-instant";
     const validatedQc = await validateLiteratureQcWithLlama({ hypothesis, qcResult, llama8Model });
-    return res.json(validatedQc);
+    const noveltyDiagnostics = buildNoveltyDiagnostics(
+      hypothesis.trim(),
+      validatedQc.references,
+      validatedQc.noveltySignal,
+    );
+    return res.json({ ...validatedQc, noveltyDiagnostics });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected server error.";
     return res.status(500).json({ error: message });
@@ -1065,7 +1139,21 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
       priorFeedback: allPriorFeedback,
     });
 
-    const planPrompt = buildPlanPrompt({ hypothesis: baseHypo, retrievalPacket });
+    let retrievalOutline = null;
+    if (process.env.GROQ_API_KEY) {
+      try {
+        retrievalOutline = await generatePlanOutline({
+          chatLlama,
+          hypothesis: baseHypo,
+          retrievalPacket,
+          llama8Model,
+        });
+      } catch {
+        retrievalOutline = null;
+      }
+    }
+
+    const planPrompt = buildPlanPrompt({ hypothesis: baseHypo, retrievalPacket, outline: retrievalOutline });
     let planRaw;
     let planningModel = `llama70:${llama70Model}`;
     let llamaError = null;
@@ -1130,6 +1218,13 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
       });
     }
     let qualityChecks = evaluatePlanQuality({ hypothesis: baseHypo, plan });
+    const groundingCheck = validatePlanGrounding(plan, retrievalPacket);
+    const extraOps = runOperationalExtraChecks({ hypothesis: baseHypo, plan, scientificMechanistic });
+    qualityChecks = {
+      ...qualityChecks,
+      warnings: [...qualityChecks.warnings, ...groundingCheck.warnings, ...extraOps.warnings],
+      errors: [...qualityChecks.errors, ...groundingCheck.errors, ...extraOps.errors],
+    };
     for (const ac of scientificMechanistic.assayCompatibility || []) {
       if (ac.passesHeuristic === false) {
         qualityChecks = {
@@ -1152,6 +1247,7 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
       modelFlow: {
         retrievalModel: `${retrievalPacket.modelFlow?.retrieval || "tavily"} + source-check:${llama8Model}`,
         planningModel,
+        retrievalOutlineUsed: Boolean(retrievalOutline),
       },
       feedbackSummary: {
         priorFeedbackCount: Array.isArray(allPriorFeedback) ? allPriorFeedback.length : 0,
@@ -1169,6 +1265,7 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
               .filter((c) => typeof c === "string" && c.trim().length > 0)
               .slice(0, 8)
           : [],
+        incorporationReport: buildIncorporationReport(allPriorFeedback),
       },
       qualityChecks,
       executionReadiness: computeExecutionReadiness({

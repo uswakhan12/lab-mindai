@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { labmindApiHeaders } from "@/lib/storage";
+import type { NoveltyDiagnostics } from "@/types/plan";
 
 interface Props {
   hypothesis: string;
@@ -27,6 +28,7 @@ interface QCResponse {
   noveltyExplanation: string;
   references: Reference[];
   modelFlow?: { retrieval?: string; validator?: string };
+  noveltyDiagnostics?: NoveltyDiagnostics;
 }
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
@@ -35,6 +37,28 @@ function noveltyBadge(signal: QCResponse["noveltySignal"]) {
   if (signal === "exact_match") return "🔴 Exact Match Found";
   if (signal === "similar_exists") return "🟡 Similar Work Exists";
   return "🟢 Not Found";
+}
+
+function evidenceTierLabel(tier: string) {
+  const labels: Record<string, string> = {
+    exact_or_near_protocol: "Exact / near-protocol candidate",
+    close_analog: "Close analog",
+    related_work: "Related work",
+    weakly_related: "Weakly related",
+    sparse: "Sparse retrieval",
+  };
+  return labels[tier] || tier.replace(/_/g, " ");
+}
+
+function hostKindLabel(k: string) {
+  const labels: Record<string, string> = {
+    protocol_repository: "Protocol repo",
+    peer_literature: "Literature",
+    vendor_or_resource: "Vendor / resource",
+    community_protocol: "Community protocol",
+    general_web: "Web",
+  };
+  return labels[k] || k;
 }
 
 export function Stage2Literature({ hypothesis, onComplete }: Props) {
@@ -134,14 +158,63 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
             </div>
             <h3 className="font-semibold text-lg">Novelty Assessment</h3>
           </div>
-          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/20">{noveltyBadge(result.noveltySignal)}</Badge>
+          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/20">
+            {noveltyBadge(result.noveltySignal)}
+          </Badge>
         </div>
         <p className="text-foreground/90 leading-relaxed">{result.noveltyExplanation}</p>
         {result.modelFlow?.validator && (
           <p className="text-xs text-muted-foreground mt-2">
-            Retrieval: <span className="font-mono text-foreground">{result.modelFlow.retrieval || "tavily"}</span>
-            {" "}· Validation: <span className="font-mono text-foreground">{result.modelFlow.validator}</span>
+            Retrieval:{" "}
+            <span className="font-mono text-foreground">
+              {result.modelFlow.retrieval || "tavily"}
+            </span>{" "}
+            · Validation:{" "}
+            <span className="font-mono text-foreground">{result.modelFlow.validator}</span>
           </p>
+        )}
+
+        {result.noveltyDiagnostics && (
+          <div className="mt-5 rounded-xl border border-primary/30 bg-background/40 p-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2 justify-between">
+              <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+                Evidence classification
+              </p>
+              <Badge variant="outline" className="border-primary/40 text-foreground/90 font-normal">
+                {evidenceTierLabel(result.noveltyDiagnostics.evidenceTier)}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="text-foreground/90">Signal alignment:</span>{" "}
+              {result.noveltyDiagnostics.signalAlignmentNote}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground">
+              <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
+                Top score{" "}
+                <span className="font-mono text-foreground">
+                  {result.noveltyDiagnostics.topRetrievalScore.toFixed(2)}
+                </span>
+              </div>
+              <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
+                Hypothesis overlap{" "}
+                <span className="font-mono text-foreground">
+                  {(result.noveltyDiagnostics.topHypothesisOverlap * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
+                Protocol host hit{" "}
+                {result.noveltyDiagnostics.hasProtocolRepositoryHit ? "yes" : "no"}
+              </div>
+              <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
+                Vendor hit {result.noveltyDiagnostics.hasVendorOrResourceHit ? "yes" : "no"}
+              </div>
+            </div>
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+              {result.noveltyDiagnostics.rulesTriggered.map((rule, i) => (
+                <li key={i}>{rule}</li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
@@ -149,40 +222,60 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
         <p className="text-xs uppercase tracking-widest text-muted-foreground px-1">
           Top relevant prior work
         </p>
-        {result.references.map((ref, i) => (
-          <a
-            key={`${ref.title}-${i}`}
-            href={ref.url || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block rounded-xl border border-border bg-card/50 hover:bg-card hover:border-primary/40 transition-all p-5 group animate-fade-in"
-            style={{ animationDelay: `${i * 100}ms`, animationFillMode: "backwards" }}
-          >
-            <div className="flex items-start justify-between gap-4 mb-2">
-              <h4 className="font-medium text-foreground/95 leading-snug group-hover:text-primary transition-colors">
-                {ref.title}
-              </h4>
-              <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 mt-1 group-hover:text-primary transition-colors" />
-            </div>
-            <p className="text-sm text-muted-foreground mb-1">{ref.authors}</p>
-            <p className="text-xs text-muted-foreground font-mono mb-3">
-              {ref.journal} · {ref.year} · {ref.doi === "N/A" ? "source link" : `doi:${ref.doi}`}
-            </p>
-            {(ref.validationStatus || typeof ref.confidence === "number") && (
-              <p className="text-xs mb-2">
-                <span className={ref.validationStatus === "validated" ? "text-emerald-400" : "text-amber-400"}>
-                  {ref.validationStatus === "validated" ? "Validated by Llama 8B" : "Weak match (Llama 8B)"}
-                </span>
-                {typeof ref.confidence === "number" ? (
-                  <span className="text-muted-foreground"> · confidence {(ref.confidence * 100).toFixed(0)}%</span>
-                ) : null}
+        {result.references.map((ref, i) => {
+          const diag = result.noveltyDiagnostics?.perReference?.[i];
+          return (
+            <a
+              key={`${ref.title}-${i}`}
+              href={ref.url || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-xl border border-border bg-card/50 hover:bg-card hover:border-primary/40 transition-all p-5 group animate-fade-in"
+              style={{ animationDelay: `${i * 100}ms`, animationFillMode: "backwards" }}
+            >
+              <div className="flex items-start justify-between gap-4 mb-2">
+                <h4 className="font-medium text-foreground/95 leading-snug group-hover:text-primary transition-colors">
+                  {ref.title}
+                </h4>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {diag ? (
+                    <Badge variant="outline" className="text-[10px] font-normal border-border">
+                      {hostKindLabel(diag.hostKind)} · score {diag.retrievalScore.toFixed(2)} ·
+                      overlap {(diag.hypothesisTokenOverlap * 100).toFixed(0)}%
+                    </Badge>
+                  ) : null}
+                  <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground mb-1">{ref.authors}</p>
+              <p className="text-xs text-muted-foreground font-mono mb-3">
+                {ref.journal} · {ref.year} · {ref.doi === "N/A" ? "source link" : `doi:${ref.doi}`}
               </p>
-            )}
-            <p className="text-sm text-foreground/80 border-l-2 border-primary/40 pl-3 leading-relaxed">
-              {ref.relevance}
-            </p>
-          </a>
-        ))}
+              {(ref.validationStatus || typeof ref.confidence === "number") && (
+                <p className="text-xs mb-2">
+                  <span
+                    className={
+                      ref.validationStatus === "validated" ? "text-emerald-400" : "text-amber-400"
+                    }
+                  >
+                    {ref.validationStatus === "validated"
+                      ? "Validated by Llama 8B"
+                      : "Weak match (Llama 8B)"}
+                  </span>
+                  {typeof ref.confidence === "number" ? (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · confidence {(ref.confidence * 100).toFixed(0)}%
+                    </span>
+                  ) : null}
+                </p>
+              )}
+              <p className="text-sm text-foreground/80 border-l-2 border-primary/40 pl-3 leading-relaxed">
+                {ref.relevance}
+              </p>
+            </a>
+          );
+        })}
         {result.references.length === 0 && (
           <div className="rounded-xl border border-border bg-card/50 p-5 text-sm text-muted-foreground">
             No relevant references were found for this hypothesis.

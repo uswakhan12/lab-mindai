@@ -20,4 +20,3 @@ export function setTheme(theme: ThemeMode): void {
   }
   applyTheme(theme);
 }
-

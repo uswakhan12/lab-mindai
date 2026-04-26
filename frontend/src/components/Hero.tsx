@@ -44,9 +44,7 @@ export function Hero() {
           </div>
 
           <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold tracking-tight leading-[1.05] mb-6">
-            From Hypothesis to{" "}
-            <span className="text-gradient">Runnable Experiment</span>{" "}
-            in Minutes
+            From Hypothesis to <span className="text-gradient">Runnable Experiment</span> in Minutes
           </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">

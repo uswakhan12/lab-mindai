@@ -10,8 +10,30 @@ test.describe("Full generate pipeline (mocked live APIs)", () => {
     const plan = generateMockPlan(hypothesis);
     const qc = {
       noveltySignal: "similar_exists" as const,
-      noveltyExplanation: "E2E mock: related cryopreservation work exists; endpoint combination remains distinct.",
+      noveltyExplanation:
+        "E2E mock: related cryopreservation work exists; endpoint combination remains distinct.",
       references: plan.literatureQC.references.slice(0, 2),
+      noveltyDiagnostics: {
+        version: 1,
+        evidenceTier: "close_analog",
+        noveltySignal: "similar_exists",
+        topRetrievalScore: 0.84,
+        topHypothesisOverlap: 0.22,
+        hasProtocolRepositoryHit: true,
+        hasVendorOrResourceHit: false,
+        rulesTriggered: [
+          "E2E: high score + overlap → close analog (not duplicate protocol proof).",
+        ],
+        signalAlignmentNote: "E2E mock: similar_exists aligns with close_analog tier.",
+        perReference: plan.literatureQC.references.slice(0, 2).map((r, i) => ({
+          index: i,
+          title: r.title,
+          url: "#",
+          retrievalScore: 0.82 - i * 0.02,
+          hypothesisTokenOverlap: 0.2,
+          hostKind: i === 0 ? "protocol_repository" : "peer_literature",
+        })),
+      },
     };
     const scientificMechanistic = {
       version: 1,
@@ -40,7 +62,11 @@ test.describe("Full generate pipeline (mocked live APIs)", () => {
         await route.continue();
         return;
       }
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(qc) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(qc),
+      });
     });
 
     await page.route("**/api/experiment-plan", async (route) => {
@@ -53,7 +79,11 @@ test.describe("Full generate pipeline (mocked live APIs)", () => {
         requestId: "e2e-mock",
         tenantId: "default",
         plan,
-        modelFlow: { planningModel: "mock:e2e", retrievalModel: "mock" },
+        modelFlow: {
+          planningModel: "mock:e2e",
+          retrievalModel: "mock",
+          retrievalOutlineUsed: false,
+        },
         feedbackSummary: {
           priorFeedbackCount: 0,
           feedbackMatch: {
@@ -62,6 +92,7 @@ test.describe("Full generate pipeline (mocked live APIs)", () => {
             similarReviewCount: 0,
           },
           appliedHighlights: [],
+          incorporationReport: [],
         },
         qualityChecks: {
           scoreOutOf10: 8.5,
@@ -92,7 +123,11 @@ test.describe("Full generate pipeline (mocked live APIs)", () => {
         scientificMechanistic,
         metadata: { generatedAt: new Date().toISOString(), generationLatencyMs: 1 },
       };
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
     });
   });
 
@@ -102,7 +137,10 @@ test.describe("Full generate pipeline (mocked live APIs)", () => {
     await page.goto(`/generate?h=${encodeURIComponent(hypothesis)}`);
     await expect(page.getByText(hypothesis)).toBeVisible();
     await page.getByTestId("stage1-run-lit-qc").click();
-    await expect(page.getByRole("heading", { name: /novelty assessment/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("heading", { name: /novelty assessment/i })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText("Evidence classification")).toBeVisible();
     await page.getByTestId("stage2-generate-plan").click();
     await expect(page.getByTestId("plan-ready-header")).toBeVisible({ timeout: 45_000 });
     await expect(page.getByTestId("mechanistic-validation-panel")).toBeVisible();

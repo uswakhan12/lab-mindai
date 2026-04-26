@@ -10,7 +10,8 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
   const toggle = (n: number) => {
     setChecked((prev) => {
       const next = new Set(prev);
-      next.has(n) ? next.delete(n) : next.add(n);
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
       return next;
     });
   };
@@ -21,7 +22,10 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
   return (
     <div className="space-y-8">
       <VerificationSourcesBlock plan={plan} section="protocol" />
-      <div className="rounded-xl border border-border bg-card/40 p-4 flex items-center justify-between flex-wrap gap-3" data-print-hide>
+      <div
+        className="rounded-xl border border-border bg-card/40 p-4 flex items-center justify-between flex-wrap gap-3"
+        data-print-hide
+      >
         <p className="text-sm text-muted-foreground">
           {completedCount} of {allSteps.length} steps complete
         </p>
@@ -39,7 +43,9 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
             <span className="text-xs font-mono text-primary uppercase tracking-widest">
               Phase {pi + 1}
             </span>
-            <h3 className="text-xl font-semibold">{phase.phaseName.replace(/^Phase \d+\s*[—-]\s*/, "")}</h3>
+            <h3 className="text-xl font-semibold">
+              {phase.phaseName.replace(/^Phase \d+\s*[—-]\s*/, "")}
+            </h3>
           </div>
 
           <ol className="space-y-3">
@@ -50,7 +56,9 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
                   key={step.stepNumber}
                   className={cn(
                     "rounded-xl border bg-card/50 backdrop-blur p-5 transition-all avoid-break",
-                    isDone ? "border-emerald-500/30 bg-emerald-500/5" : "border-border hover:border-border/80",
+                    isDone
+                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      : "border-border hover:border-border/80",
                   )}
                   data-print-card
                 >
@@ -66,12 +74,21 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
                       data-print-hide
                       aria-label={`Mark step ${step.stepNumber} complete`}
                     >
-                      {isDone ? <Check className="h-4 w-4" /> : <span className="text-xs font-mono">{step.stepNumber}</span>}
+                      {isDone ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <span className="text-xs font-mono">{step.stepNumber}</span>
+                      )}
                     </button>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3 mb-2">
-                        <h4 className={cn("font-semibold", isDone && "line-through text-muted-foreground")}>
+                        <h4
+                          className={cn(
+                            "font-semibold",
+                            isDone && "line-through text-muted-foreground",
+                          )}
+                        >
                           Step {step.stepNumber}: {step.title}
                         </h4>
                         <span className="shrink-0 inline-flex items-center gap-1 text-xs text-muted-foreground font-mono">
@@ -79,10 +96,26 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
                           {formatDuration(step.durationHours)}
                         </span>
                       </div>
-                      <p className="text-sm text-foreground/85 leading-relaxed mb-3">{step.description}</p>
+                      {typeof step.literatureRefIndex === "number" &&
+                      Array.isArray(plan.literatureQC?.references) &&
+                      plan.literatureQC.references[step.literatureRefIndex] ? (
+                        <p className="text-[10px] text-primary/90 font-mono mb-1.5">
+                          Packet ref [{step.literatureRefIndex}]:{" "}
+                          {plan.literatureQC.references[step.literatureRefIndex].title.slice(0, 96)}
+                          {plan.literatureQC.references[step.literatureRefIndex].title.length > 96
+                            ? "…"
+                            : ""}
+                        </p>
+                      ) : null}
+                      <p className="text-sm text-foreground/85 leading-relaxed mb-3">
+                        {step.description}
+                      </p>
 
                       {step.evidenceLinks && step.evidenceLinks.length > 0 && (
-                        <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 mb-3 text-xs" data-print-hide>
+                        <div
+                          className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 mb-3 text-xs"
+                          data-print-hide
+                        >
                           <p className="font-semibold text-primary mb-1.5 flex items-center gap-1">
                             <Link2 className="h-3 w-3" />
                             Evidence for this step

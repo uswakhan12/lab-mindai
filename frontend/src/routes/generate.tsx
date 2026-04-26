@@ -117,7 +117,10 @@ function GeneratePage() {
           </div>
 
           <div className="mt-10 text-center">
-            <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <Link
+              to="/"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
               ← Start over with a new hypothesis
             </Link>
           </div>

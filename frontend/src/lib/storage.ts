@@ -147,7 +147,13 @@ export function buildFeedbackContext(domain: string): string | null {
   if (prior.length === 0) return null;
   const corrections: string[] = [];
   for (const r of prior.slice(0, 5)) {
-    for (const section of ["protocol", "materials", "budget", "timeline", "validation"] as ReviewSection[]) {
+    for (const section of [
+      "protocol",
+      "materials",
+      "budget",
+      "timeline",
+      "validation",
+    ] as ReviewSection[]) {
       if (r.corrections[section]?.trim()) {
         corrections.push(`- [${section}] ${r.corrections[section].trim()}`);
       }
@@ -173,7 +179,10 @@ export function cryptoRandomId(): string {
 /** Encode hypothesis as URL-safe base64 for shareable links. */
 export function encodeHypothesis(h: string): string {
   if (typeof btoa !== "undefined") {
-    return btoa(unescape(encodeURIComponent(h))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return btoa(unescape(encodeURIComponent(h)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
   }
   return encodeURIComponent(h);
 }
