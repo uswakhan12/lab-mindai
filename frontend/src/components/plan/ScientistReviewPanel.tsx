@@ -58,8 +58,10 @@ export function ScientistReviewPanel({ plan, hypothesis }: { plan: FullPlan; hyp
     <div className="rounded-xl border border-border bg-card/50 backdrop-blur p-6 space-y-5" data-print-hide>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="font-semibold text-lg">Scientist Review</h3>
-          <p className="text-sm text-muted-foreground">Your corrections train future plans in this domain.</p>
+          <h3 className="font-semibold text-lg text-lab-violet light:text-violet-900">Scientist Review</h3>
+          <p className="text-sm text-violet-200/90 light:text-violet-800/90">
+            Your corrections train future plans in this domain.
+          </p>
         </div>
         <Button
           type="button"
@@ -90,7 +92,9 @@ export function ScientistReviewPanel({ plan, hypothesis }: { plan: FullPlan; hyp
           {EXPERTISE.map((e) => <option key={e} value={e}>{e}</option>)}
         </select>
       </div>
-      <Button onClick={submit} className="w-full bg-primary-gradient" disabled={overall === 0}>Submit Review</Button>
+      <Button onClick={submit} className="w-full btn-cta" disabled={overall === 0}>
+        Submit Review
+      </Button>
     </div>
   );
 }

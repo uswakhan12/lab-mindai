@@ -1,87 +1,56 @@
-import { useEffect, useState } from "react";
 import { ArrowRight, BookOpen, ExternalLink, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { useGenerateStore } from "@/lib/generateStore";
+import type { LiteratureQCResult } from "@/lib/generateTypes";
 
 interface Props {
-  hypothesis: string;
   onComplete: () => void;
+  suspended?: boolean;
 }
 
-interface Reference {
-  title: string;
-  authors: string;
-  journal: string;
-  year: number;
-  doi: string;
-  relevance: string;
-  url?: string;
-  validationStatus?: "validated" | "weak_match";
-  confidence?: number;
-}
-
-interface QCResponse {
-  noveltySignal: "not_found" | "similar_exists" | "exact_match";
-  noveltyExplanation: string;
-  references: Reference[];
-  modelFlow?: { retrieval?: string; validator?: string };
-}
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
-
-function noveltyBadge(signal: QCResponse["noveltySignal"]) {
+function noveltyBadge(signal: LiteratureQCResult["noveltySignal"]) {
   if (signal === "exact_match") return "🔴 Exact Match Found";
   if (signal === "similar_exists") return "🟡 Similar Work Exists";
   return "🟢 Not Found";
 }
 
-export function Stage2Literature({ hypothesis, onComplete }: Props) {
-  const [progress, setProgress] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [result, setResult] = useState<QCResponse | null>(null);
+export function Stage2Literature({ onComplete, suspended = false }: Props) {
+  const loading = useGenerateStore((s) => s.s2Loading);
+  const error = useGenerateStore((s) => s.s2Error);
+  const progress = useGenerateStore((s) => s.s2Progress);
+  const result = useGenerateStore((s) => s.s2Result);
+  const abortedByEdit = useGenerateStore((s) => s.s2AbortedByEdit);
+  if (suspended) {
+    return (
+      <div className="rounded-2xl border border-border/80 bg-card/50 backdrop-blur p-8 text-center animate-fade-in">
+        <p className="text-sm text-muted-foreground">
+          Literature search paused while you edit the hypothesis.
+        </p>
+        <p className="text-sm text-foreground/90 mt-2">
+          Save to apply a new hypothesis and re-run, or cancel to continue.
+        </p>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    setLoading(true);
-    setError("");
-    setResult(null);
-    setProgress(0);
-
-    const start = Date.now();
-    const duration = 5000;
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const pct = Math.min(92, (elapsed / duration) * 100);
-      setProgress(pct);
-    }, 50);
-
-    const fetchQC = async () => {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/literature-qc`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ hypothesis }),
-        });
-        const data = (await response.json()) as QCResponse & { error?: string; details?: string };
-        if (!response.ok) {
-          const parts = [data.error, data.details].filter(Boolean);
-          throw new Error(parts.join(" — ") || "Failed to fetch literature QC.");
-        }
-        setResult(data);
-        setProgress(100);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unexpected error";
-        setError(message);
-      } finally {
-        clearInterval(interval);
-        setLoading(false);
-      }
-    };
-
-    fetchQC();
-    return () => clearInterval(interval);
-  }, [hypothesis]);
+  if (!loading && !error && !result && abortedByEdit) {
+    return (
+      <div className="rounded-2xl border border-border/80 bg-card/50 backdrop-blur p-8 text-center space-y-4 animate-fade-in">
+        <p className="text-sm text-foreground/90">
+          The literature search was stopped while the hypothesis was open for editing.
+        </p>
+        <Button
+          type="button"
+          onClick={() => useGenerateStore.getState().bumpS2Rerun()}
+          className="btn-cta"
+        >
+          Run literature search again
+        </Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -133,13 +102,19 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
             </div>
             <h3 className="font-semibold text-lg">Novelty Assessment</h3>
           </div>
-          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/20">{noveltyBadge(result.noveltySignal)}</Badge>
+          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/20">
+            {noveltyBadge(result.noveltySignal)}
+          </Badge>
         </div>
         <p className="text-foreground/90 leading-relaxed">{result.noveltyExplanation}</p>
         {result.modelFlow?.validator && (
           <p className="text-xs text-muted-foreground mt-2">
-            Retrieval: <span className="font-mono text-foreground">{result.modelFlow.retrieval || "tavily"}</span>
-            {" "}· Validation: <span className="font-mono text-foreground">{result.modelFlow.validator}</span>
+            Retrieval:{" "}
+            <span className="font-mono text-foreground">
+              {result.modelFlow.retrieval || "tavily"}
+            </span>{" "}
+            · Validation:{" "}
+            <span className="font-mono text-foreground">{result.modelFlow.validator}</span>
           </p>
         )}
       </div>
@@ -169,11 +144,20 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
             </p>
             {(ref.validationStatus || typeof ref.confidence === "number") && (
               <p className="text-xs mb-2">
-                <span className={ref.validationStatus === "validated" ? "text-emerald-400" : "text-amber-400"}>
-                  {ref.validationStatus === "validated" ? "Validated by Llama 8B" : "Weak match (Llama 8B)"}
+                <span
+                  className={
+                    ref.validationStatus === "validated" ? "text-emerald-400" : "text-amber-400"
+                  }
+                >
+                  {ref.validationStatus === "validated"
+                    ? "Validated by Llama 8B"
+                    : "Weak match (Llama 8B)"}
                 </span>
                 {typeof ref.confidence === "number" ? (
-                  <span className="text-muted-foreground"> · confidence {(ref.confidence * 100).toFixed(0)}%</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · confidence {(ref.confidence * 100).toFixed(0)}%
+                  </span>
                 ) : null}
               </p>
             )}
@@ -190,11 +174,7 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
       </div>
 
       <div className="flex justify-end">
-        <Button
-          onClick={onComplete}
-          size="lg"
-          className="bg-primary-gradient hover:opacity-95 shadow-glow h-12 px-6 rounded-xl group"
-        >
+        <Button onClick={onComplete} size="lg" className="btn-cta h-12 px-6 rounded-xl group">
           Generate Full Experiment Plan
           <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
         </Button>

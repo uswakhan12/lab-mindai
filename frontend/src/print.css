@@ -1,5 +1,7 @@
 /* Print-specific styles for clean PDF export via window.print().
-   Activated only via @media print — no screen impact. */
+   Activated only via @media print — no screen impact.
+   Scientist-facing PDFs: do not surface LLM/vendor/tooling names — use data-print-hide
+   for anything internal; plan copy in verification blocks should stay tool-agnostic. */
 
 @media print {
   /* Reset to white background, black text */
@@ -11,11 +13,23 @@
   body {
     font-family: "Inter", system-ui, sans-serif !important;
     font-size: 10pt;
-    line-height: 1.5;
+    line-height: 1.45;
+  }
+
+  /* Tighten page chrome: less vertical padding in main layout */
+  main {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .container {
+    max-width: 100% !important;
+    padding-top: 0.25in !important;
+    padding-bottom: 0.25in !important;
   }
 
   /* Hide all UI chrome */
   [data-print-hide],
+  [data-print-chart-hide],
   nav,
   header,
   footer,
@@ -24,47 +38,112 @@
     display: none !important;
   }
 
-  /* Sonner toasts (incl. “Save as PDF” hint) must never appear in exported PDF */
+  /* Sonner toasts must never appear in exported PDF */
   [data-sonner-toaster],
   [data-sonner-toast],
   ol[data-sonner-toaster] {
     display: none !important;
   }
 
-  /* Reveal print-only blocks */
+  /* Reveal print-only report body */
   [data-print-only] {
     display: block !important;
   }
 
-  /* Make all sections visible (no tabs) */
+  /* All sections: linear document flow, no forced page breaks */
   [data-print-section] {
     display: block !important;
-    page-break-before: always;
-    margin-top: 0 !important;
-  }
-  [data-print-section]:first-of-type {
     page-break-before: auto;
+    break-before: auto;
+    margin-top: 0 !important;
+    margin-bottom: 12pt !important;
+    page-break-inside: auto;
+    break-inside: auto;
   }
 
-  /* Ensure cards have visible borders on paper */
+  /* Hypothesis (first block): clearly a title, not body copy */
+  [data-print-section] h1 {
+    font-size: 18pt;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em;
+    margin: 0 0 8pt 0 !important;
+    color: #0a0a0a !important;
+  }
+
+  /* Major PDF section labels: Overview, Protocol, Materials, … (wins over generic [data-print-only] h2) */
+  [data-print-only] section[data-print-section] > h2 {
+    font-size: 16pt;
+    font-weight: 800 !important;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+    margin: 0 0 10pt 0 !important;
+    padding-bottom: 4pt;
+    border-bottom: 1.5pt solid #1a1a1a;
+    color: #0a0a0a !important;
+  }
+
+  [data-print-section] h1 + p {
+    font-weight: 400 !important;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #2e2e2e !important;
+  }
+
+  /* Generic card flattening */
   [data-print-card] {
-    border: 1px solid #d0d0d0 !important;
+    border: 0 !important;
     background: white !important;
     color: black !important;
     box-shadow: none !important;
-    padding: 12pt !important;
-    margin-bottom: 12pt !important;
-    page-break-inside: avoid;
+    padding: 0 !important;
+    margin: 0 0 8pt 0 !important;
+    page-break-inside: auto;
+    break-inside: auto;
   }
 
-  /* Headings: black, slightly larger */
-  h1, h2, h3, h4 {
-    color: black !important;
-    page-break-after: avoid;
+  /* Strip “boxed” UI inside the print report: borders, tints, radii, shadows */
+  [data-print-only] [class*="rounded-2xl"],
+  [data-print-only] [class*="rounded-xl"],
+  [data-print-only] [class*="rounded-lg"],
+  [data-print-only] [class*="rounded-md"],
+  [data-print-only] [class*="rounded-"] {
+    border-radius: 0 !important;
   }
-  h1 { font-size: 18pt; }
-  h2 { font-size: 14pt; margin-top: 14pt; }
-  h3 { font-size: 12pt; margin-top: 10pt; }
+
+  [data-print-only] [class*="shadow"] {
+    box-shadow: none !important;
+  }
+
+  [data-print-only] [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+  }
+
+  /* Neuter tinted card backgrounds (keep text readable) */
+  [data-print-only] [class*="bg-card"],
+  [data-print-only] [class*="bg-primary/"],
+  [data-print-only] [class*="bg-muted"],
+  [data-print-only] [class*="bg-rose"],
+  [data-print-only] [class*="bg-amber"],
+  [data-print-only] [class*="bg-emerald"] {
+    background: white !important;
+  }
+
+  /* Drop decorative borders on divs/sections; tables handled below */
+  [data-print-only] section [class*="border-"]:not(table):not(tr):not(th):not(td),
+  [data-print-only] div[class*="border-border"],
+  [data-print-only] div[class*="border-rose"],
+  [data-print-only] div[class*="border-amber"],
+  [data-print-only] div[class*="border-emerald"],
+  [data-print-only] div[class*="border-primary"] {
+    border: none !important;
+  }
+
+  /* Headings: allow natural flow; weights/sizes refined under [data-print-only] below */
+  h1, h2, h3, h4 {
+    page-break-after: auto;
+    break-after: auto;
+  }
 
   /* Tables */
   table {
@@ -73,7 +152,8 @@
     page-break-inside: auto;
   }
   th, td {
-    border: 1px solid #b0b0b0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid #d6d6d6 !important;
     padding: 4pt 6pt !important;
     text-align: left !important;
     color: black !important;
@@ -84,31 +164,204 @@
     font-weight: 600;
   }
 
-  /* Per-page footer via running element */
-  @page {
-    margin: 0.6in 0.5in 0.8in 0.5in;
-    size: letter;
-    @bottom-center {
-      content: "Generated by LabMind AI · Fulcrum Science × Hack-Nation 2026 · Page " counter(page) " of " counter(pages);
-      font-family: "Inter", sans-serif;
-      font-size: 8pt;
-      color: #666;
-    }
+  /*
+   * Materials: wide min-width + overflow stack causes the last columns to be clipped in PDFs.
+   * Let the table use the full printable width, smaller type, and wrap long text.
+   */
+  [data-print-only] [data-print-materials-card] {
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+  [data-print-only] [data-print-materials-scroll] {
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+  [data-print-only] [data-print-materials-table] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  [data-print-only] [data-print-materials-table] th,
+  [data-print-only] [data-print-materials-table] td {
+    font-size: 7.25pt !important;
+    line-height: 1.35 !important;
+    padding: 2pt 3pt !important;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+    vertical-align: top;
+  }
+  [data-print-only] [data-print-materials-table] th:nth-child(1),
+  [data-print-only] [data-print-materials-table] td:nth-child(1) {
+    width: 15%;
+  }
+  [data-print-only] [data-print-materials-table] th:nth-child(2),
+  [data-print-only] [data-print-materials-table] td:nth-child(2) {
+    width: 20%;
+  }
+  [data-print-only] [data-print-materials-table] th:nth-child(3),
+  [data-print-only] [data-print-materials-table] td:nth-child(3) {
+    width: 6%;
+  }
+  [data-print-only] [data-print-materials-table] th:nth-child(4),
+  [data-print-only] [data-print-materials-table] td:nth-child(4) {
+    width: 12%;
+  }
+  [data-print-only] [data-print-materials-table] th:nth-child(5),
+  [data-print-only] [data-print-materials-table] td:nth-child(5) {
+    width: 12%;
+  }
+  [data-print-only] [data-print-materials-table] th:nth-child(6),
+  [data-print-only] [data-print-materials-table] td:nth-child(6) {
+    width: 9%;
+  }
+  [data-print-only] [data-print-materials-table] th:nth-child(7),
+  [data-print-only] [data-print-materials-table] td:nth-child(7) {
+    width: 8%;
+  }
+  [data-print-only] [data-print-materials-table] th:nth-child(8),
+  [data-print-only] [data-print-materials-table] td:nth-child(8) {
+    width: 6%;
+  }
+  [data-print-only] [data-print-materials-table] svg,
+  [data-print-only] [data-print-materials-table] [class*="badge"],
+  [data-print-only] [data-print-materials-table] [class*="Badge"] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  /* Prevent muted text from being invisible */
-  .text-muted-foreground { color: #555 !important; }
-  .text-foreground, .text-foreground\/95, .text-foreground\/90, .text-foreground\/80 { color: black !important; }
+  /* Simple margins — no CSS Paged Media footer (can be flaky and waste vertical space) */
+  @page {
+    margin: 0.5in 0.45in 0.55in 0.45in;
+    size: letter;
+  }
 
-  /* Force expand all collapsibles for printing */
+  /* Budget: one column in PDF when chart is hidden (no empty first column) */
+  [data-print-only] [data-budget-row] {
+    display: block !important;
+  }
+  [data-print-only] [data-budget-row] > * {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .text-muted-foreground { color: #444 !important; }
+  .text-foreground, .text-foreground\/95, .text-foreground\/90, .text-foreground\/80 { color: black !important; }
+  [data-print-only] [class*="text-primary"] {
+    color: black !important;
+  }
+
+  [data-print-only] [class*="text-amber-"],
+  [data-print-only] [class*="text-emerald-"],
+  [data-print-only] [class*="text-rose-"] {
+    color: #1a1a1a !important;
+  }
+
+  /*
+   * Report typography: headings dark & heavy; body & tables normal weight so structure is obvious.
+   */
+  [data-print-only] p,
+  [data-print-only] li,
+  [data-print-only] td,
+  [data-print-only] dd {
+    font-weight: 400 !important;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #2a2a2a !important;
+  }
+
+  [data-print-only] h1,
+  [data-print-only] h2,
+  [data-print-only] h3,
+  [data-print-only] h4,
+  [data-print-only] h5,
+  [data-print-only] h6 {
+    color: #0a0a0a !important;
+  }
+
+  [data-print-only] h1 {
+    font-size: 18pt;
+    font-weight: 800 !important;
+  }
+
+  /* Inner h2 (e.g. plan title) — not the ALL-CAPS section label */
+  [data-print-only] h2 {
+    font-size: 15pt;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-top: 0.15em;
+    margin-bottom: 0.35em;
+    text-transform: none;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  [data-print-only] h3 {
+    font-size: 12.25pt;
+    font-weight: 700 !important;
+    line-height: 1.3;
+    margin-top: 0.55em;
+    margin-bottom: 0.3em;
+  }
+
+  [data-print-only] h4 {
+    font-size: 10.5pt;
+    font-weight: 700 !important;
+  }
+
+  [data-print-only] strong,
+  [data-print-only] b,
+  [data-print-only] th {
+    font-weight: 700 !important;
+  }
+
+  [data-print-only] th {
+    font-size: 9.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #111 !important;
+  }
+
+  /* Expand references for print */
   details { display: block !important; }
   details > summary { display: block !important; font-weight: 600; }
 
-  a { color: black !important; text-decoration: none !important; }
+  /*
+   * Clickable links in “Save as PDF”
+   * — Avoid painting all <a> as black (conflicts with link annotations in Chrome/Edge).
+   * — Use normal inline flow (not flex) so the PDF link rectangle matches the text.
+   */
+  a[href^="http://"],
+  a[href^="https://"] {
+    display: inline !important;
+    pointer-events: auto !important;
+    position: static !important;
+    overflow: visible !important;
+    color: #0000cc !important;
+    text-decoration: underline !important;
+    text-underline-offset: 2px;
+  }
 
-  /* Page-break helpers */
+  a:not([href^="http://"]):not([href^="https://"]) {
+    color: black !important;
+    text-decoration: underline !important;
+    text-underline-offset: 2px;
+  }
+
   .page-break-before { page-break-before: always; }
-  .avoid-break { page-break-inside: avoid; }
+  .avoid-break { page-break-inside: auto; break-inside: auto; }
+
+  /*
+   * Timeline Gantt: browsers often omit non-text backgrounds in print; global rules also
+   * force many bg-* tints to white. Restore color + layout for scientist-facing PDFs.
+   */
+  [data-print-only] [data-timeline-gantt],
+  [data-print-only] [data-timeline-gantt] * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 /* Hide print-only elements on screen */

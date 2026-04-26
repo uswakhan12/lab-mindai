@@ -5,6 +5,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, ShieldAlert, CheckCircle2, FlaskConical, Brain } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { REASONING_KICKERS } from "@/lib/planAccents";
 
 const COLORS = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EC4899"];
 const RATES: Record<"USD" | "EUR" | "GBP", { rate: number; symbol: string }> = {
@@ -27,7 +29,9 @@ export function BudgetTab({ plan }: { plan: FullPlan }) {
     <div className="space-y-6">
       <VerificationSourcesBlock plan={plan} section="budget" />
       <div className="flex items-center justify-between flex-wrap gap-3" data-print-hide>
-        <p className="text-sm text-muted-foreground">All amounts include {ep.budget.contingencyPercent}% contingency buffer.</p>
+        <p className="text-sm text-emerald-200/90 light:text-emerald-800">
+          All amounts include {ep.budget.contingencyPercent}% contingency buffer.
+        </p>
         <div className="flex gap-1 rounded-lg border border-border bg-card/50 p-1">
           {(["USD", "EUR", "GBP"] as const).map((c) => (
             <button key={c} onClick={() => setCurrency(c)}
@@ -38,8 +42,8 @@ export function BudgetTab({ plan }: { plan: FullPlan }) {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 items-center">
-        <div className="rounded-xl border border-border bg-card/40 p-5 h-72" data-print-card>
+      <div className="grid md:grid-cols-2 gap-6 items-center print:grid-cols-1" data-budget-row>
+        <div className="rounded-xl border border-border bg-card/40 p-5 h-72" data-print-card data-print-chart-hide>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2}>
@@ -73,44 +77,84 @@ export function BudgetTab({ plan }: { plan: FullPlan }) {
   );
 }
 
+/** Hex/rgba fills — print.css was neutering `bg-muted` (track) and `bg-emerald`/`bg-amber` (bars) to white. Inline colors survive PDF export. */
+const TIMELINE_PHASE_PAINT: Record<string, { fill: string; border: string }> = {
+  preparation: { fill: "rgba(59, 130, 246, 0.65)", border: "rgba(96, 165, 250, 0.9)" },
+  treatment: { fill: "rgba(16, 185, 129, 0.65)", border: "rgba(52, 211, 153, 0.9)" },
+  measurement: { fill: "rgba(245, 158, 11, 0.65)", border: "rgba(251, 191, 36, 0.9)" },
+  analysis: { fill: "rgba(168, 85, 247, 0.65)", border: "rgba(192, 132, 252, 0.9)" },
+  storage: { fill: "rgba(6, 182, 212, 0.7)", border: "rgba(103, 232, 249, 0.85)" },
+};
+
+const TIMELINE_TRACK = "rgba(120, 120, 130, 0.28)";
+
 export function TimelineTab({ plan }: { plan: FullPlan }) {
   const phases = plan.experimentPlan.timeline.phases;
   const total = plan.experimentPlan.totalDurationDays;
-  const colors: Record<string, string> = {
-    preparation: "bg-blue-500/70 border-blue-400",
-    treatment: "bg-emerald-500/70 border-emerald-400",
-    measurement: "bg-amber-500/70 border-amber-400",
-    analysis: "bg-purple-500/70 border-purple-400",
-  };
+  /** Backend often uses 1-based days (first day = 1). Chart axis is 0..total, so 1-based bars must offset by (start-1) or the first block sits off the left. */
+  const minStart = phases.length ? Math.min(...phases.map((p) => p.startDay)) : 0;
+  const oneBased = minStart >= 1;
+  const typeKeys = Object.keys(TIMELINE_PHASE_PAINT) as (keyof typeof TIMELINE_PHASE_PAINT)[];
   return (
     <div className="space-y-5">
       <VerificationSourcesBlock plan={plan} section="timeline" />
-      <p className="text-sm text-muted-foreground">Total duration: <span className="text-foreground font-medium">{total} days (~{Math.ceil(total / 7)} weeks)</span></p>
-      <div className="rounded-xl border border-border bg-card/40 p-5 space-y-3" data-print-card>
-        {phases.map((p) => {
-          const widthPct = ((p.endDay - p.startDay) / total) * 100;
-          const offsetPct = (p.startDay / total) * 100;
-          return (
-            <div key={p.name} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">{p.name}</span>
-                <span className="font-mono text-xs text-muted-foreground">Day {p.startDay}–{p.endDay} · {p.endDay - p.startDay}d</span>
+      <div data-timeline-gantt>
+        <p className="text-sm text-sky-200/90 light:text-sky-800">
+          Total duration:{" "}
+          <span className="text-sky-100 light:text-sky-900 font-medium">{total} days (~{Math.ceil(total / 7)} weeks)</span>
+        </p>
+        <p className="text-xs text-sky-200/90 light:text-sky-800/90 leading-relaxed max-w-2xl">
+          Long stretches usually mean <span className="text-sky-100/95 light:text-sky-900">off-bench</span> work: e.g. cryovials in liquid nitrogen, cell expansion, reagent lead time, or scheduled core-facility runs—always cross-check the protocol for what actually happens in those days.
+        </p>
+        <div className="rounded-xl border border-border bg-card/40 p-5 space-y-3" data-print-card>
+          {phases.map((p) => {
+            const spanDays = Math.max(0, p.endDay - p.startDay + 1);
+            const widthPct = total > 0 ? (spanDays / total) * 100 : 0;
+            const t0 = oneBased ? p.startDay - 1 : p.startDay;
+            const offsetPct = total > 0 ? (t0 / total) * 100 : 0;
+            const paint = TIMELINE_PHASE_PAINT[p.type] ?? TIMELINE_PHASE_PAINT.preparation;
+            return (
+              <div key={p.name} className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{p.name}</span>
+                  <span className="font-mono text-xs text-muted-foreground">Day {p.startDay}–{p.endDay} · {Math.max(0, p.endDay - p.startDay + 1)}d</span>
+                </div>
+                <div
+                  className="relative h-7 rounded-md overflow-hidden border border-border/30"
+                  style={{ backgroundColor: TIMELINE_TRACK }}
+                >
+                  <div
+                    className="absolute h-full min-w-px rounded-sm shadow-sm box-border"
+                    style={{
+                      left: `${offsetPct}%`,
+                      width: `${widthPct}%`,
+                      backgroundColor: paint.fill,
+                      border: `2px solid ${paint.border}`,
+                    }}
+                  />
+                </div>
               </div>
-              <div className="relative h-7 rounded-md bg-muted/40 overflow-hidden">
-                <div className={`absolute h-full border-l-2 rounded-md ${colors[p.type] || colors.preparation}`}
-                  style={{ left: `${offsetPct}%`, width: `${widthPct}%` }} />
-              </div>
-            </div>
-          );
-        })}
-        <div className="flex items-center justify-between pt-3 border-t border-border text-xs font-mono text-muted-foreground">
-          <span>Day 0</span><span>Day {total}</span>
+            );
+          })}
+          <div className="flex items-center justify-between pt-3 border-t border-border text-xs font-mono text-muted-foreground">
+            <span>{oneBased ? "Day 1" : "Day 0"}</span>
+            <span>Day {total}</span>
+          </div>
         </div>
-      </div>
-      <div className="flex flex-wrap gap-3 text-xs">
-        {Object.entries(colors).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-2"><span className={`h-3 w-3 rounded ${v}`} /><span className="capitalize text-muted-foreground">{k}</span></div>
-        ))}
+        <div className="flex flex-wrap gap-3 text-xs">
+          {typeKeys.map((k) => {
+            const { fill, border } = TIMELINE_PHASE_PAINT[k];
+            return (
+              <div key={k} className="flex items-center gap-2">
+                <span
+                  className="h-3 w-3 rounded-sm shrink-0 box-border shadow-sm"
+                  style={{ backgroundColor: fill, border: `1px solid ${border}` }}
+                />
+                <span className="capitalize text-muted-foreground">{k}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -121,20 +165,36 @@ export function ValidationTab({ plan }: { plan: FullPlan }) {
   return (
     <div className="space-y-5">
       <VerificationSourcesBlock plan={plan} section="validation" />
-      <Section icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />} title="Primary success metrics">
+      <Section
+        icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+        title="Primary success metrics"
+        titleClassName="text-emerald-100 light:text-emerald-900"
+      >
         <ul className="space-y-2">{v.successMetrics.map((m, i) => <li key={i} className="text-sm flex gap-2"><span className="text-emerald-400">✓</span>{m}</li>)}</ul>
       </Section>
-      <Section icon={<Brain className="h-4 w-4 text-primary" />} title="Statistical analysis plan">
+      <Section
+        icon={<Brain className="h-4 w-4 text-violet-400" />}
+        title="Statistical analysis plan"
+        titleClassName="text-violet-200 light:text-violet-900"
+      >
         <p className="text-sm text-foreground/90 leading-relaxed">{v.statisticalPlan}</p>
         <p className="text-sm mt-3"><span className="text-muted-foreground">Sample size:</span> {v.sampleSize}</p>
       </Section>
-      <Section icon={<FlaskConical className="h-4 w-4 text-primary" />} title="Required controls">
+      <Section
+        icon={<FlaskConical className="h-4 w-4 text-cyan-400" />}
+        title="Required controls"
+        titleClassName="text-cyan-200 light:text-cyan-900"
+      >
         <div className="grid sm:grid-cols-2 gap-3">
           <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3"><p className="text-xs uppercase text-emerald-400 mb-1">Positive</p><p className="text-sm">{v.controls.positive}</p></div>
           <div className="rounded-md border border-rose-500/30 bg-rose-500/5 p-3"><p className="text-xs uppercase text-rose-400 mb-1">Negative</p><p className="text-sm">{v.controls.negative}</p></div>
         </div>
       </Section>
-      <Section icon={<AlertTriangle className="h-4 w-4 text-amber-400" />} title="Failure modes & early detection">
+      <Section
+        icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
+        title="Failure modes & early detection"
+        titleClassName="text-amber-200 light:text-amber-900"
+      >
         <div className="space-y-2">{v.failureModes.map((f, i) => (
           <div key={i} className="rounded-md border border-border bg-card/30 p-3">
             <p className="font-medium text-sm">{f.mode}</p>
@@ -142,7 +202,11 @@ export function ValidationTab({ plan }: { plan: FullPlan }) {
           </div>
         ))}</div>
       </Section>
-      <Section icon={<CheckCircle2 className="h-4 w-4 text-primary" />} title="QC checkpoints">
+      <Section
+        icon={<CheckCircle2 className="h-4 w-4 text-sky-400" />}
+        title="QC checkpoints"
+        titleClassName="text-sky-200 light:text-sky-900"
+      >
         <ul className="space-y-1.5">{v.qcCheckpoints.map((c, i) => <li key={i} className="text-sm flex gap-2 text-foreground/85"><span className="text-primary">▸</span>{c}</li>)}</ul>
       </Section>
     </div>
@@ -154,7 +218,11 @@ export function SafetyTab({ plan }: { plan: FullPlan }) {
   return (
     <div className="space-y-5">
       <VerificationSourcesBlock plan={plan} section="safety" />
-      <Section icon={<ShieldAlert className="h-4 w-4 text-rose-400" />} title="Hazardous materials">
+      <Section
+        icon={<ShieldAlert className="h-4 w-4 text-rose-400" />}
+        title="Hazardous materials"
+        titleClassName="text-rose-200 light:text-rose-900"
+      >
         <div className="space-y-3">{s.hazardousMaterials.map((m, i) => (
           <div key={i} className="rounded-md border border-rose-500/30 bg-rose-500/5 p-3" data-print-card>
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
@@ -165,13 +233,25 @@ export function SafetyTab({ plan }: { plan: FullPlan }) {
           </div>
         ))}</div>
       </Section>
-      <Section icon={<ShieldAlert className="h-4 w-4 text-amber-400" />} title="Required PPE">
+      <Section
+        icon={<ShieldAlert className="h-4 w-4 text-amber-400" />}
+        title="Required PPE"
+        titleClassName="text-amber-200 light:text-amber-900"
+      >
         <div className="flex flex-wrap gap-2">{s.requiredPPE.map((p) => <Badge key={p} variant="outline" className="border-amber-500/30 bg-amber-500/5 text-amber-200">{p}</Badge>)}</div>
       </Section>
-      <Section icon={<CheckCircle2 className="h-4 w-4 text-primary" />} title="Waste disposal">
+      <Section
+        icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+        title="Waste disposal"
+        titleClassName="text-emerald-200 light:text-emerald-900"
+      >
         <ul className="space-y-1.5 text-sm">{s.wasteDisposal.map((w, i) => <li key={i} className="flex gap-2 text-foreground/85"><span className="text-primary">▸</span>{w}</li>)}</ul>
       </Section>
-      <Section icon={<AlertTriangle className="h-4 w-4 text-rose-400" />} title="Emergency procedures">
+      <Section
+        icon={<AlertTriangle className="h-4 w-4 text-rose-400" />}
+        title="Emergency procedures"
+        titleClassName="text-rose-200 light:text-rose-900"
+      >
         <ul className="space-y-1.5 text-sm">{s.emergencyProcedures.map((p, i) => <li key={i} className="flex gap-2 text-foreground/85"><span className="text-rose-400">!</span>{p}</li>)}</ul>
       </Section>
     </div>
@@ -184,24 +264,33 @@ export function ReasoningPanel({ plan }: { plan: FullPlan }) {
     <details open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
       className="rounded-xl border border-border bg-card/40 backdrop-blur" data-print-card>
       <summary className="cursor-pointer p-5 list-none flex items-center justify-between hover:bg-card/60 transition-colors">
-        <span className="flex items-center gap-2 font-medium"><Brain className="h-4 w-4 text-primary" />🧠 How the AI thinks (reasoning trace)</span>
+        <span className="flex items-center gap-2 font-medium text-cyan-200 light:text-cyan-900">
+          <Brain className="h-4 w-4 text-lab-violet" />
+          How the AI thinks (reasoning trace)
+        </span>
         <span className="text-xs text-muted-foreground">{open ? "Hide" : "Show"}</span>
       </summary>
       <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Repositories consulted</p>
-          <ul className="text-sm space-y-1">{plan.reasoning.repositoriesConsulted.map((r, i) => <li key={i} className="text-foreground/80">▸ {r}</li>)}</ul>
+          <p className={cn("text-xs uppercase tracking-widest mb-2", REASONING_KICKERS[0])}>Repositories consulted</p>
+          <ul className="text-sm space-y-1 text-foreground/85">
+            {plan.reasoning.repositoriesConsulted.map((r, i) => (
+              <li key={i} className="text-foreground/80">
+                ▸ {r}
+              </li>
+            ))}
+          </ul>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Budget methodology</p>
+          <p className={cn("text-xs uppercase tracking-widest mb-2", REASONING_KICKERS[1])}>Budget methodology</p>
           <p className="text-sm text-foreground/85 leading-relaxed">{plan.reasoning.budgetMethodology}</p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Literature influence</p>
+          <p className={cn("text-xs uppercase tracking-widest mb-2", REASONING_KICKERS[2])}>Literature influence</p>
           <p className="text-sm text-foreground/85 leading-relaxed">{plan.reasoning.literatureInfluence}</p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Confidence by section</p>
+          <p className={cn("text-xs uppercase tracking-widest mb-2", REASONING_KICKERS[3])}>Confidence by section</p>
           <div className="space-y-2">{plan.reasoning.confidence.map((c, i) => (
             <div key={i} className="flex items-start justify-between gap-3 text-sm">
               <div className="flex-1"><span className="font-medium">{c.section}</span><span className="text-muted-foreground"> — {c.reason}</span></div>
@@ -214,10 +303,23 @@ export function ReasoningPanel({ plan }: { plan: FullPlan }) {
   );
 }
 
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function Section({
+  icon,
+  title,
+  children,
+  titleClassName = "text-foreground/95",
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+  titleClassName?: string;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card/40 backdrop-blur p-5 avoid-break" data-print-card>
-      <div className="flex items-center gap-2 mb-3"><span>{icon}</span><h3 className="font-semibold">{title}</h3></div>
+      <div className="flex items-center gap-2 mb-3">
+        <span>{icon}</span>
+        <h3 className={cn("font-semibold", titleClassName)}>{title}</h3>
+      </div>
       {children}
     </div>
   );

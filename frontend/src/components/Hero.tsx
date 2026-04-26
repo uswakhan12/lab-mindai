@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 const EXAMPLES = [
@@ -32,15 +33,19 @@ export function Hero() {
   };
 
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative overflow-hidden border-b border-border/25">
       <div className="absolute inset-0 bg-grid pointer-events-none" />
       <div className="absolute inset-0 bg-hero-glow pointer-events-none" />
 
       <div className="container mx-auto px-6 pt-20 pb-16 relative">
         <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 backdrop-blur px-4 py-1.5 mb-8 text-xs text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            AI Co-Scientist · Powered by Fulcrum Science
+          <div className="inline-flex items-center gap-2 rounded-full border-2 border-cyan-500/40 bg-gradient-to-r from-cyan-500/20 via-violet-500/15 to-fuchsia-500/20 backdrop-blur-md px-4 py-1.5 mb-8 text-xs text-muted-foreground shadow-lg shadow-cyan-500/25">
+            <Sparkles className="h-3.5 w-3.5 text-amber-400 dark:text-amber-300 light:text-amber-600" />
+            <span>
+              <span className="text-foreground/90">AI Co-Scientist</span>
+              <span className="text-muted-foreground"> · </span>
+              <span className="text-fuchsia-400 dark:text-fuchsia-300 light:text-fuchsia-800">Powered by Fulcrum Science</span>
+            </span>
           </div>
 
           <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold tracking-tight leading-[1.05] mb-6">
@@ -70,11 +75,20 @@ export function Hero() {
           </div>
 
           <div className="flex flex-wrap gap-2 mt-5 justify-center">
-            {EXAMPLES.map((ex) => (
+            {EXAMPLES.map((ex, i) => (
               <button
                 key={ex.label}
+                type="button"
                 onClick={() => setHypothesis(ex.text)}
-                className="text-sm px-4 py-2 rounded-full border border-border bg-card/60 hover:bg-accent hover:border-primary/40 transition-all backdrop-blur"
+                className={cn(
+                  "text-sm px-4 py-2 rounded-full border-2 bg-card/90 backdrop-blur transition-all shadow-sm",
+                  i % 3 === 0 &&
+                    "border-emerald-500/45 text-emerald-200 dark:text-emerald-300/90 light:text-emerald-900 bg-emerald-500/15 hover:border-emerald-500/45 hover:bg-emerald-500/25 hover:shadow-emerald-500/25",
+                  i % 3 === 1 &&
+                    "border-violet-500/45 text-violet-200 dark:text-violet-300/90 light:text-violet-900 bg-violet-500/15 hover:border-violet-500/45 hover:bg-violet-500/25 hover:shadow-violet-500/25",
+                  i % 3 === 2 &&
+                    "border-amber-500/45 text-amber-200 dark:text-amber-300/90 light:text-amber-900 bg-amber-500/15 hover:border-amber-500/45 hover:bg-amber-500/25 hover:shadow-amber-500/25",
+                )}
               >
                 {ex.label}
               </button>
@@ -85,7 +99,7 @@ export function Hero() {
             <Button
               onClick={handleGenerate}
               size="lg"
-              className="bg-primary-gradient hover:opacity-95 shadow-glow text-base h-14 px-8 rounded-xl font-medium group"
+              className="btn-cta text-base h-14 px-8 rounded-xl font-medium group"
             >
               Generate Experiment Plan
               <ArrowRight className="ml-1 h-5 w-5 transition-transform group-hover:translate-x-1" />

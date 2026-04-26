@@ -30,13 +30,23 @@ function Index() {
       <main className="flex-1">
         <Hero />
         <HowItWorks />
-        <section id="examples" className="container mx-auto px-6 py-16 text-center">
-          <h2 className="text-3xl md:text-4xl font-semibold mb-3">Examples across disciplines</h2>
+        <section
+          id="examples"
+          className="container mx-auto px-6 py-16 text-center app-section-surface-c rounded-2xl my-2 border border-border/30"
+        >
+          <h2 className="text-3xl md:text-4xl font-semibold mb-3">
+            <span className="text-foreground">Examples </span>
+            <span className="text-lab-teal">across</span>{" "}
+            <span className="text-gradient">disciplines</span>
+          </h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
             From cryobiology to carbon capture — try a sample hypothesis above to see LabMind in action.
           </p>
         </section>
-        <section id="about" className="container mx-auto px-6 py-16 max-w-3xl text-center">
+        <section
+          id="about"
+          className="container mx-auto px-6 py-16 max-w-3xl text-center app-section-surface-b rounded-2xl my-2 border border-border/30"
+        >
           <h2 className="text-3xl md:text-4xl font-semibold mb-4">Built by scientists, for scientists</h2>
           <p className="text-muted-foreground leading-relaxed">
             LabMind is an AI co-scientist trained on protocols, methods papers, and operational
