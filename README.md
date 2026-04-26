@@ -426,7 +426,7 @@ If `DATABASE_URL` is **unset**, reviews use `backend/data/labmind.sqlite` with t
 | `LLAMA8_MODEL` | No | Default `llama-3.1-8b-instant`. |
 | `LLAMA70_MODEL` | No | Default `llama-3.3-70b-versatile`; legacy id remapped in code. |
 | `GEMINI_API_KEY` | Strongly recommended | Fallback planner / shadow generation. |
-| `GEMINI_MODEL` | No | Default `gemini-1.5-flash`; Pro ids may be remapped to Flash in code for free-tier safety. |
+| `GEMINI_MODEL` | No | Default `gemini-2.5-flash`; legacy `gemini-1.5-*` / `gemini-pro` ids are remapped to `gemini-2.5-flash` in code. |
 | `GEMINI_SECONDARY_MODEL` | No | Optional second Gemini model string. |
 | `EXPERIMENT_PLAN_LLAMA_FALLBACK_MODEL` | No | Inserted into Groq fallback model list for planning. |
 | `OPENAI_API_KEY` | No | Enables embedding cosine novelty assist. |
