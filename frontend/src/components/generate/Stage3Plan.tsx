@@ -73,8 +73,18 @@ async function fetchModelGeneratedPlan(hypothesis: string): Promise<{
     body: JSON.stringify({ hypothesis, domain, priorFeedback }),
   });
   if (!res.ok) {
-    const payload = (await res.json().catch(() => ({}))) as { error?: string; details?: string };
-    const msg = [payload.error, payload.details].filter(Boolean).join(" — ");
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      details?: string;
+      procurementGateErrors?: string[];
+    };
+    const gate =
+      res.status === 422 &&
+      Array.isArray(payload.procurementGateErrors) &&
+      payload.procurementGateErrors.length > 0
+        ? `\n${payload.procurementGateErrors.join("\n")}`
+        : "";
+    const msg = [payload.error, payload.details].filter(Boolean).join(" — ") + gate;
     throw new Error(msg || "Experiment plan generation failed.");
   }
   const data = (await res.json()) as {

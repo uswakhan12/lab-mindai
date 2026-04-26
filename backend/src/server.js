@@ -11,7 +11,7 @@ import {
 import { runScientificMechanisticValidation } from "./scientific-mechanistic.js";
 import { computeExecutionReadiness } from "./execution-readiness.js";
 import { buildNoveltyDiagnostics } from "./novelty-diagnostics.js";
-import { validatePlanGrounding } from "./grounding-validator.js";
+import { validatePlanGrounding, isProcurementCriticalMaterial } from "./grounding-validator.js";
 import { runOperationalExtraChecks } from "./operational-extra-checks.js";
 import { generatePlanOutline } from "./plan-outline.js";
 
@@ -619,7 +619,7 @@ Return ONLY valid JSON object matching this shape (no markdown):
     "difficultyLevel":"Beginner|Intermediate|Advanced",
     "expertiseTags":["string"],
     "protocol":{"phases":[{"phaseName":"string","steps":[{"stepNumber":1,"title":"string","description":"string","durationHours":1,"safetyWarnings":["string"],"criticalNotes":["string"],"literatureRefIndex":0}]}]},
-    "materials":[{"item":"string","specification":"string","quantity":"string","supplier":"string","catalogNumber":"string","unitPriceUSD":0,"totalCostUSD":0,"category":"Reagent|Equipment|Consumable","leadTimeWeeks":0,"grounding":{"sourceUrl":"EXACT url copied from retrieval packet literatureQC.references[].url OR the literal PENDING","sourceTitle":"string","evidenceNote":"<=140 chars: why this ref supports the line","confidence":"High|Medium|Low"}}],
+    "materials":[{"item":"string","specification":"string","quantity":"string","supplier":"string","catalogNumber":"string","unitPriceUSD":0,"totalCostUSD":0,"category":"Reagent|Equipment|Consumable","leadTimeWeeks":0,"lastVerifiedAt":"ISO-8601 when price/availability was checked","quoteSourceType":"literature_packet|vendor_page|verification_tavily|model_estimate|unknown","stalenessDays":0,"grounding":{"sourceUrl":"EXACT url from retrieval references OR verification materials URLs OR PENDING","sourceTitle":"string","evidenceNote":"<=140 chars","confidence":"High|Medium|Low"}}],
     "budget":{"byCategory":[{"category":"string","amountUSD":0}],"contingencyPercent":10,"totalWithContingencyUSD":0},
     "timeline":{"phases":[{"name":"string","startDay":0,"endDay":0,"type":"preparation|treatment|analysis|measurement","dependencies":["string"]}]},
     "validation":{"successMetrics":["string"],"statisticalPlan":"string","sampleSize":"string","controls":{"positive":"string","negative":"string"},"failureModes":[{"mode":"string","earlyDetection":"string"}],"qcCheckpoints":["string"]},
@@ -645,7 +645,7 @@ Constraints:
 - Include explicit safety and compliance notes (IRB/IBC/ethics approvals) whenever work could involve biosafety or human/animal subjects.
 - When describing methodology, bias toward established protocol literature (protocols.io, Bio-protocol, Nature Protocols, peer-reviewed methods, vendor protocols) already present in the retrieval packet — do not invent DOIs or URLs.
 - Each protocol step MUST include literatureRefIndex: 0, 1, or 2 pointing at which retrieval packet reference (same order as literatureQC.references in the packet) most informs that step. If none apply, use 0 and explain limitation in criticalNotes.
-- Each material line MUST include grounding.sourceUrl either (a) an EXACT URL string copied from retrievalPacket.literatureQC.references[].url, or (b) the literal PENDING if only supplier pages will be validated later. Never invent URLs.
+- Each material line MUST include grounding.sourceUrl either (a) an EXACT URL from retrievalPacket.literatureQC.references[].url, or (b) PENDING until verified. For quoteSourceType prefer verification_tavily or vendor_page when grounded in web checks; use literature_packet when the price claim is tied to a paper. Set lastVerifiedAt to the assumed check time (ISO). stalenessDays should match age from lastVerifiedAt to today if known, else 0 with note in evidenceNote.
 
 ${outlineBlock}
 === PRIOR SCIENTIST CORRECTIONS (MANDATORY) ===
@@ -825,6 +825,24 @@ function runSafetyChecks({ hypothesis, plan }) {
   return { ok: true };
 }
 
+function enrichMaterialQuoteFields(plan, generatedAtIso) {
+  const mats = plan?.experimentPlan?.materials;
+  if (!Array.isArray(mats)) return;
+  const now = Date.parse(generatedAtIso) || Date.now();
+  for (const m of mats) {
+    if (!m.lastVerifiedAt && generatedAtIso) m.lastVerifiedAt = generatedAtIso;
+    if (!m.quoteSourceType) m.quoteSourceType = "unknown";
+    const parsed = m.lastVerifiedAt ? Date.parse(String(m.lastVerifiedAt)) : NaN;
+    if (Number.isFinite(parsed)) {
+      const computed = Math.max(0, Math.floor((now - parsed) / 86400000));
+      if (m.stalenessDays == null || !Number.isFinite(Number(m.stalenessDays))) m.stalenessDays = computed;
+      else m.stalenessDays = Math.max(Number(m.stalenessDays), computed);
+    } else if (m.stalenessDays == null) {
+      m.stalenessDays = null;
+    }
+  }
+}
+
 function buildEvidenceCoverage(verificationSources) {
   const sections = ["protocol", "materials", "budget", "timeline", "validation", "safety"];
   const coverage = {};
@@ -940,6 +958,44 @@ function evaluatePlanQuality({ hypothesis, plan }) {
     );
   }
 
+  let quoteStalenessPenalty = 0;
+  for (let i = 0; i < materials.length; i++) {
+    const m = materials[i];
+    const critical = isProcurementCriticalMaterial(m);
+    const type = String(m?.quoteSourceType || "unknown").toLowerCase();
+    const days = typeof m?.stalenessDays === "number" && Number.isFinite(m.stalenessDays) ? m.stalenessDays : null;
+    const hasDate = Boolean(m?.lastVerifiedAt && Number.isFinite(Date.parse(String(m.lastVerifiedAt))));
+
+    if (["model_estimate", "unknown", ""].includes(type)) {
+      if (critical || m?.category === "Reagent") {
+        warnings.push(
+          `Material "${m?.item || `line ${i + 1}`}": quoteSourceType "${type || "unknown"}" — pricing traceability is weak.`,
+        );
+        quoteStalenessPenalty += 0.25;
+      }
+    }
+    if (days != null) {
+      if (days > 365 && critical) {
+        errors.push(
+          `QUOTE_STALE: critical material "${m?.item}" quote ~${days}d old (>365d) — refresh before procurement.`,
+        );
+        quoteStalenessPenalty += 1.2;
+      } else if (days > 180 && critical) {
+        errors.push(
+          `QUOTE_STALE: critical material "${m?.item}" quote ~${days}d old (>180d) — confirm current pricing.`,
+        );
+        quoteStalenessPenalty += 0.8;
+      } else if (days > 90 && (critical || m?.category === "Reagent")) {
+        warnings.push(`Material "${m?.item}": quote age ~${days}d — re-verify before large spend.`);
+        quoteStalenessPenalty += 0.35;
+      }
+    } else if ((critical || m?.category === "Reagent") && !hasDate) {
+      warnings.push(`Material "${m?.item}": missing lastVerifiedAt — quote freshness not auditable.`);
+      quoteStalenessPenalty += 0.2;
+    }
+  }
+  quoteStalenessPenalty = Math.min(3.2, quoteStalenessPenalty);
+
   const completenessScore = Math.max(0, 10 - errors.length * 2 - warnings.length * 0.5);
   const evidenceScore = Math.round(normalizedEvidence * 10 * 10) / 10;
   const operationalScore = Math.max(
@@ -948,7 +1004,8 @@ function evaluatePlanQuality({ hypothesis, plan }) {
       (totalProtocolSteps < 6 ? 2 : 0) -
       (materials.length < 8 ? 1.5 : 0) -
       (timelinePhases.length < 3 ? 1.5 : 0) -
-      (errors.length > 0 ? 2 : 0),
+      (errors.length > 0 ? 2 : 0) -
+      quoteStalenessPenalty,
   );
   const score = Math.round(((completenessScore * 0.35 + evidenceScore * 0.3 + operationalScore * 0.35) * 10)) / 10;
   return {
@@ -1217,13 +1274,37 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
         requestId: res.locals.requestId,
       });
     }
+
+    const generatedAtIso = new Date().toISOString();
+    enrichMaterialQuoteFields(plan, generatedAtIso);
+
     let qualityChecks = evaluatePlanQuality({ hypothesis: baseHypo, plan });
     const groundingCheck = validatePlanGrounding(plan, retrievalPacket);
+    if (groundingCheck.procurementGateFailed) {
+      return res.status(422).json({
+        error: "Procurement grounding gate failed: critical reagents / antibodies / cell inputs must cite an allow-listed URL from literature QC or post-plan verification.",
+        procurementGateErrors: groundingCheck.errors,
+        procurementGateStats: groundingCheck.stats,
+        requestId: res.locals.requestId,
+        plan,
+        qualityChecks: {
+          ...qualityChecks,
+          gatesPassed: false,
+          errors: [...qualityChecks.errors, ...groundingCheck.errors],
+          warnings: [...qualityChecks.warnings, ...groundingCheck.warnings],
+        },
+        scientificMechanistic,
+        metadata: {
+          generatedAt: generatedAtIso,
+          generationLatencyMs: Date.now() - started,
+        },
+      });
+    }
     const extraOps = runOperationalExtraChecks({ hypothesis: baseHypo, plan, scientificMechanistic });
     qualityChecks = {
       ...qualityChecks,
       warnings: [...qualityChecks.warnings, ...groundingCheck.warnings, ...extraOps.warnings],
-      errors: [...qualityChecks.errors, ...groundingCheck.errors, ...extraOps.errors],
+      errors: [...qualityChecks.errors, ...extraOps.errors],
     };
     for (const ac of scientificMechanistic.assayCompatibility || []) {
       if (ac.passesHeuristic === false) {
@@ -1276,7 +1357,7 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
       }),
       scientificMechanistic,
       metadata: {
-        generatedAt: new Date().toISOString(),
+        generatedAt: generatedAtIso,
         generationLatencyMs: Date.now() - started,
       },
       plan,

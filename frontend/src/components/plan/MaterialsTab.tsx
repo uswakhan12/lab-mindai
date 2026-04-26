@@ -36,6 +36,9 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
   const hasGrounding = materials.some(
     (m) => m.grounding && typeof m.grounding.sourceUrl === "string",
   );
+  const hasQuoteMeta = materials.some(
+    (m) => Boolean(m.lastVerifiedAt) || m.quoteSourceType != null || m.stalenessDays != null,
+  );
 
   const onSort = (key: SortKey) => {
     if (sortKey === key) setAsc(!asc);
@@ -101,7 +104,9 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
         data-print-card
       >
         <div className="overflow-x-auto">
-          <table className={`w-full text-sm ${hasGrounding ? "min-w-[920px]" : "min-w-[760px]"}`}>
+          <table
+            className={`w-full text-sm ${hasGrounding || hasQuoteMeta ? "min-w-[1040px]" : "min-w-[760px]"}`}
+          >
             <thead className="bg-card border-b border-border text-xs uppercase tracking-widest text-muted-foreground">
               <tr>
                 <Th label="Item" onClick={() => onSort("item")} />
@@ -110,6 +115,7 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
                 <Th label="Supplier" onClick={() => onSort("supplier")} />
                 <Th label="Catalog #" />
                 {hasGrounding ? <Th label="Packet provenance" /> : null}
+                {hasQuoteMeta ? <Th label="Quote freshness" /> : null}
                 <Th label="Unit $" onClick={() => onSort("unitPriceUSD")} align="right" />
                 <Th label="Total $" onClick={() => onSort("totalCostUSD")} align="right" />
                 <Th label="Lead" onClick={() => onSort("leadTimeWeeks")} align="right" />
@@ -166,6 +172,33 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
                         ) : (
                           <span className="text-muted-foreground/80">PENDING</span>
                         )}
+                      </td>
+                    ) : null}
+                    {hasQuoteMeta ? (
+                      <td className="px-3 py-3 align-top text-xs text-muted-foreground max-w-[160px]">
+                        {m.lastVerifiedAt ? (
+                          <span className="font-mono text-[10px] text-foreground/85 block">
+                            {String(m.lastVerifiedAt).slice(0, 10)}
+                          </span>
+                        ) : (
+                          <span className="text-amber-400/90">—</span>
+                        )}
+                        {m.quoteSourceType ? (
+                          <Badge
+                            variant="outline"
+                            className="mt-1 text-[9px] border-border font-normal"
+                          >
+                            {m.quoteSourceType}
+                          </Badge>
+                        ) : null}
+                        {typeof m.stalenessDays === "number" ? (
+                          <span className="block text-[10px] mt-0.5">
+                            {m.stalenessDays}d stale
+                            {m.stalenessDays > 90 ? (
+                              <AlertTriangle className="inline h-3 w-3 ml-0.5 text-amber-400" />
+                            ) : null}
+                          </span>
+                        ) : null}
                       </td>
                     ) : null}
                     <td className="px-3 py-3 align-top text-right font-mono">

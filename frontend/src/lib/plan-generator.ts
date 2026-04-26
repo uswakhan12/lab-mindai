@@ -159,8 +159,12 @@ function annotateProtocol(
 function withPendingGrounding(
   mats: FullPlan["experimentPlan"]["materials"],
 ): FullPlan["experimentPlan"]["materials"] {
+  const now = new Date().toISOString();
   return mats.map((m, i) => ({
     ...m,
+    lastVerifiedAt: now,
+    quoteSourceType: "model_estimate" as const,
+    stalenessDays: 0,
     grounding: {
       sourceUrl: "PENDING",
       sourceTitle: "Live /api/experiment-plan binds literature packet URLs",

@@ -109,6 +109,13 @@ export interface MaterialGrounding {
   confidence?: "High" | "Medium" | "Low";
 }
 
+export type MaterialQuoteSourceType =
+  | "literature_packet"
+  | "vendor_page"
+  | "verification_tavily"
+  | "model_estimate"
+  | "unknown";
+
 export interface Material {
   item: string;
   specification: string;
@@ -119,6 +126,11 @@ export interface Material {
   totalCostUSD: number;
   category: MaterialCategory;
   leadTimeWeeks: number;
+  /** ISO-8601 when price / availability was last checked (or assumed). */
+  lastVerifiedAt?: string;
+  quoteSourceType?: MaterialQuoteSourceType;
+  /** Age of quote in days (model or server-normalized from lastVerifiedAt). */
+  stalenessDays?: number | null;
   grounding?: MaterialGrounding;
 }
 
