@@ -392,11 +392,14 @@ If `DATABASE_URL` is **unset**, reviews use `backend/data/labmind.sqlite` with t
 
 ## Deployment notes
 
+**Free step-by-step deploy** (Render API + Cloudflare frontend, no Vercel required): **[`DEPLOY.md`](./DEPLOY.md)** at the repository root.
+
 | Target | Guidance |
 |--------|----------|
-| **Frontend** | Build static/client bundle via `npm run build`; TanStack Start / Cloudflare plugin may target Workers — follow `frontend/vite.config.ts` and provider docs. **Verify** env vars (`VITE_*`) at build time. |
-| **Backend** | Run `node src/server.js` behind a process manager; set `PORT`; configure secrets via platform secret store; enable HTTPS termination at reverse proxy. |
-| **AWS / GCP / Azure / Railway / Render** | **Not** codified in-repo — standard Node container or native Node runtime; add health check on `GET /health`. |
+| **Frontend (this repo)** | `npm run build` in `frontend/` targets **Cloudflare Workers** (`wrangler`, `dist/server`). Prefer **Cloudflare** for zero-config match, or migrate the Vite stack for **Vercel** per [`DEPLOY.md`](./DEPLOY.md). |
+| **Backend** | Run `node src/server.js` on a **Node** host (Railway, Render, Fly, Cloud Run, …); set `PORT` and secrets; health check `GET /health`. |
+| **Vercel** | **Not** a one-click match today because the Lovable/TanStack preset builds for **Cloudflare** — see [`DEPLOY.md`](./DEPLOY.md) → *Deploying the frontend on Vercel*. |
+| **AWS / GCP / Azure** | Standard container / VM deployment for `backend/`; same `DEPLOY.md` backend section applies. |
 
 ---
 

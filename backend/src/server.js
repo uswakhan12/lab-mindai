@@ -1,4 +1,6 @@
 import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import cors from "cors";
 import express from "express";
 import {
@@ -1692,9 +1694,22 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
   }
 });
 
-const isDirectRun = process.argv[1] && process.argv[1].endsWith("server.js");
-if (isDirectRun) {
-  app.listen(PORT, async () => {
+/** Start HTTP when this file is the process entrypoint (Render, `node src/server.js`, etc.). */
+function shouldStartHttpServer() {
+  if (process.env.NODE_ENV === "test") return false;
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    const absEntry = path.resolve(entry);
+    const absModule = fileURLToPath(import.meta.url);
+    return pathToFileURL(absEntry).href === pathToFileURL(absModule).href;
+  } catch {
+    return entry.endsWith("server.js");
+  }
+}
+
+if (shouldStartHttpServer()) {
+  const server = app.listen(PORT, "0.0.0.0", async () => {
     try {
       const store = await initFeedbackStore();
       // eslint-disable-next-line no-console
@@ -1704,7 +1719,12 @@ if (isDirectRun) {
       console.error("feedback_store_init_failed", e instanceof Error ? e.message : String(e));
     }
     // eslint-disable-next-line no-console
-    console.log(`Backend running at http://localhost:${PORT}`);
+    console.log(`Backend listening on 0.0.0.0:${PORT}`);
+  });
+  server.on("error", (err) => {
+    // eslint-disable-next-line no-console
+    console.error("server_listen_failed", err instanceof Error ? err.stack || err.message : String(err));
+    process.exit(1);
   });
 }
 

@@ -1,8 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
 import pg from "pg";
 import { buildKeywordSignature, inferOntologyTags, similarityScore } from "./ontology-similarity.js";
 
@@ -22,6 +20,8 @@ function usePostgres() {
 async function getSqlite() {
   if (!sqliteDbPromise) {
     sqliteDbPromise = (async () => {
+      /** Dynamic import so hosts like Render never load `sqlite3` when `DATABASE_URL` (Postgres) is set. */
+      const [{ default: sqlite3 }, { open }] = await Promise.all([import("sqlite3"), import("sqlite")]);
       await mkdir(dataDir, { recursive: true });
       const db = await open({
         filename: dbPath,
