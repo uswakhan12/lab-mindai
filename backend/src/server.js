@@ -525,17 +525,20 @@ async function chatLlamaWithFallback({ preferredModel, system, user, temperature
   throw lastError || new Error("All Llama model candidates failed.");
 }
 
-/** Map deprecated / paid-only Gemini IDs to Flash (free tier / v1beta). */
+const DEFAULT_GEMINI_FLASH_MODEL = "gemini-2.5-flash";
+
+/** Map deprecated / paid-only Gemini IDs to a current Flash model (free tier / v1beta). */
 function normalizeGeminiModelId(model) {
   const raw = String(model || "").trim();
   const lower = raw.toLowerCase();
-  if (!lower) return "gemini-1.5-flash";
+  if (!lower) return DEFAULT_GEMINI_FLASH_MODEL;
   if (
+    lower.includes("gemini-1.5-flash") ||
     lower.includes("gemini-1.5-pro") ||
     lower.includes("gemini-1.5-pro-latest") ||
     lower === "gemini-pro"
   ) {
-    return "gemini-1.5-flash";
+    return DEFAULT_GEMINI_FLASH_MODEL;
   }
   return raw;
 }
@@ -577,12 +580,14 @@ async function chatGemini({ model, prompt }) {
 
 async function chatGeminiWithFallback({ preferredModel, prompt }) {
   const normalizedPreferred = normalizeGeminiModelId(preferredModel);
-  // Default: 1.5 Flash only — many free projects have quota limit 0 on gemini-2.0-flash.
+  // Default: try 2.5 Flash after preferred model, then optional secondary models.
   const extras = (process.env.GEMINI_SECONDARY_MODEL || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  const candidates = Array.from(new Set([normalizedPreferred, "gemini-1.5-flash", ...extras].filter(Boolean)));
+  const candidates = Array.from(
+    new Set([normalizedPreferred, DEFAULT_GEMINI_FLASH_MODEL, ...extras].filter(Boolean)),
+  );
   let lastError = null;
   for (const model of candidates) {
     try {
@@ -1375,7 +1380,7 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
       rawLlama70 === "meta-llama/llama-3.1-70b-instruct"
         ? "llama-3.3-70b-versatile"
         : rawLlama70;
-    const geminiModel = normalizeGeminiModelId(process.env.GEMINI_MODEL || "gemini-1.5-flash");
+    const geminiModel = normalizeGeminiModelId(process.env.GEMINI_MODEL || DEFAULT_GEMINI_FLASH_MODEL);
     const planLlamaFallbackModels = Array.from(
       new Set(
         [
