@@ -16,6 +16,10 @@ interface ModelFlow {
   retrievalModel?: string;
   planningModel?: string;
 }
+interface FeedbackSummary {
+  priorFeedbackCount?: number;
+  appliedHighlights?: string[];
+}
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "overview", label: "Overview", icon: Sparkles },
@@ -31,10 +35,12 @@ export function PlanView({
   plan,
   hypothesis,
   modelFlow,
+  feedbackSummary,
 }: {
   plan: FullPlan;
   hypothesis: string;
   modelFlow?: ModelFlow;
+  feedbackSummary?: FeedbackSummary;
 }) {
   const [tab, setTab] = useState<TabId>("overview");
   const priorReviews = getReviewsForDomain(plan.domain);
@@ -85,6 +91,20 @@ export function PlanView({
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3" data-print-hide>
           <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
           <p className="text-sm">💡 This plan was improved by <strong>{priorReviews.length} scientist review{priorReviews.length === 1 ? "" : "s"}</strong> from similar experiments in this domain.</p>
+        </div>
+      )}
+
+      {!!feedbackSummary?.appliedHighlights?.length && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2" data-print-hide>
+          <p className="text-sm font-medium text-emerald-100">
+            Applied prior feedback from {feedbackSummary.priorFeedbackCount || feedbackSummary.appliedHighlights.length} similar review
+            {(feedbackSummary.priorFeedbackCount || feedbackSummary.appliedHighlights.length) === 1 ? "" : "s"}:
+          </p>
+          <ul className="text-sm text-emerald-50/90 space-y-1 list-disc pl-5">
+            {feedbackSummary.appliedHighlights.map((item, idx) => (
+              <li key={`${item}-${idx}`}>{item}</li>
+            ))}
+          </ul>
         </div>
       )}
 

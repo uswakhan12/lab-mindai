@@ -23,7 +23,14 @@ interface ModelFlow {
   planningModel?: string;
 }
 
-async function fetchModelGeneratedPlan(hypothesis: string): Promise<{ plan: FullPlan; modelFlow?: ModelFlow }> {
+interface FeedbackSummary {
+  priorFeedbackCount?: number;
+  appliedHighlights?: string[];
+}
+
+async function fetchModelGeneratedPlan(
+  hypothesis: string,
+): Promise<{ plan: FullPlan; modelFlow?: ModelFlow; feedbackSummary?: FeedbackSummary }> {
   const { domain } = detectDomain(hypothesis);
   const priorFeedback = getReviewsForDomain(domain).slice(-5).map((r) => ({
     domain: r.domain,
@@ -43,15 +50,16 @@ async function fetchModelGeneratedPlan(hypothesis: string): Promise<{ plan: Full
     const msg = [payload.error, payload.details].filter(Boolean).join(" — ");
     throw new Error(msg || "Experiment plan generation failed.");
   }
-  const data = (await res.json()) as { plan?: FullPlan; modelFlow?: ModelFlow };
+  const data = (await res.json()) as { plan?: FullPlan; modelFlow?: ModelFlow; feedbackSummary?: FeedbackSummary };
   if (!data?.plan) throw new Error("Backend did not return a plan.");
-  return { plan: data.plan, modelFlow: data.modelFlow };
+  return { plan: data.plan, modelFlow: data.modelFlow, feedbackSummary: data.feedbackSummary };
 }
 
 export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
   const [stepIdx, setStepIdx] = useState(0);
   const [plan, setPlan] = useState<FullPlan | null>(null);
   const [modelFlow, setModelFlow] = useState<ModelFlow | undefined>(undefined);
+  const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary | undefined>(undefined);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
@@ -71,6 +79,7 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
         if (cancelled) return;
         addToHistory(hypothesis, generated.plan);
         setModelFlow(generated.modelFlow);
+        setFeedbackSummary(generated.feedbackSummary);
         setPlan(generated.plan);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Plan generation failed.");
@@ -84,7 +93,16 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
     };
   }, [hypothesis]);
 
-  if (plan) return <PlanView plan={plan} hypothesis={hypothesis} modelFlow={modelFlow} />;
+  if (plan) {
+    return (
+      <PlanView
+        plan={plan}
+        hypothesis={hypothesis}
+        modelFlow={modelFlow}
+        feedbackSummary={feedbackSummary}
+      />
+    );
+  }
   if (error) {
     return (
       <div className="rounded-2xl border border-destructive/40 bg-card/60 backdrop-blur p-8 animate-fade-in">

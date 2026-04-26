@@ -76,6 +76,10 @@ function mapTavilyToQC(tavilyData) {
   };
 }
 
+function hasMeaningfulReferences(references) {
+  return Array.isArray(references) && references.some((r) => typeof r?.title === "string" && r.title.trim().length > 0);
+}
+
 async function tavilySearchRaw(apiKey, query) {
   const q = clipQuery(query);
   const resp = await fetch(TAVILY_URL, {
@@ -403,6 +407,7 @@ Constraints:
 - Budget should add up coherently.
 - Timeline must have consistent start/end dependencies.
 - Keep references and verificationSources grounded in retrieval packet.
+- Include explicit safety and compliance notes (IRB/IBC/ethics approvals) whenever work could involve biosafety or human/animal subjects.
 
 Hypothesis:
 ${hypothesis}
@@ -410,6 +415,160 @@ ${hypothesis}
 Retrieval packet:
 ${JSON.stringify(retrievalPacket).slice(0, 120000)}
 `;
+}
+
+async function validateLiteratureQcWithLlama({ hypothesis, qcResult, llama8Model }) {
+  const verificationPrompt = `You are a strict scientific retrieval validator.
+Given a hypothesis and Tavily results, return ONLY JSON with:
+{
+  "noveltySignal":"not_found|similar_exists|exact_match",
+  "noveltyExplanation":"string",
+  "references":[
+    {
+      "title":"string",
+      "authors":"string",
+      "journal":"string",
+      "year":2024,
+      "doi":"string",
+      "relevance":"string",
+      "url":"string",
+      "validationStatus":"validated|weak_match",
+      "confidence":0.0
+    }
+  ]
+}
+Rules:
+- Keep 1-3 references.
+- Choose only papers/sources that are actually relevant to the hypothesis.
+- If uncertain, mark validationStatus as weak_match and lower confidence.
+
+Hypothesis:
+${hypothesis}
+
+Tavily base extraction:
+${JSON.stringify(qcResult).slice(0, 45000)}
+`;
+
+  let validated = null;
+  let validatorError = "";
+  try {
+    const validator = await chatLlamaWithFallback({
+      preferredModel: llama8Model,
+      system: "You verify whether retrieved scientific papers match the hypothesis. Return strict JSON only.",
+      user: verificationPrompt,
+      temperature: 0.1,
+      fallbackModels: ["llama-3.1-8b-instant", "llama3-8b-8192"],
+    });
+    const raw = validator.text;
+    validated = extractJsonObject(raw);
+    if (validated) {
+      validated.__validatorModel = validator.model;
+    }
+  } catch (e) {
+    validatorError = e instanceof Error ? e.message : String(e);
+    validated = null;
+  }
+
+  if (validated && Array.isArray(validated.references)) {
+    return {
+      noveltySignal: validated.noveltySignal || qcResult.noveltySignal,
+      noveltyExplanation: validated.noveltyExplanation || qcResult.noveltyExplanation,
+      references: validated.references.map((r) => ({
+        validationStatus: r.validationStatus === "validated" ? "validated" : "weak_match",
+        title: r.title || "Untitled source",
+        authors: r.authors || "Source metadata unavailable",
+        journal: r.journal || "Web source",
+        year: Number.isFinite(Number(r.year)) ? Number(r.year) : new Date().getFullYear(),
+        doi: r.doi || "N/A",
+        relevance: r.relevance || "Relevance validated by Llama 8B.",
+        url: r.url || "#",
+        confidence: confidenceForStatus(
+          r.validationStatus === "validated" ? "validated" : "weak_match",
+          typeof r.confidence === "number" ? r.confidence : r.score,
+          0.6,
+        ),
+      })).slice(0, 3),
+      modelFlow: {
+        retrieval: "tavily",
+        validator: validated.__validatorModel || llama8Model,
+        validatorError: validatorError || undefined,
+      },
+    };
+  }
+
+  return {
+    ...qcResult,
+    references: qcResult.references.map((r) => ({
+      ...r,
+      validationStatus: "weak_match",
+      confidence: confidenceForStatus("weak_match", r.score, 0.55),
+    })),
+    modelFlow: {
+      retrieval: "tavily",
+      validator: "llama8-unavailable",
+      validatorError: validatorError || "Llama validator returned no parseable JSON.",
+    },
+  };
+}
+
+async function buildLiteratureRetrievalPacket({ hypothesis, tavilyKey, llama8Model, priorFeedback = [] }) {
+  if (!tavilyKey) {
+    return {
+      retrievalSummary:
+        "External retrieval unavailable because TAVILY_API_KEY is missing. Plan will use hypothesis and prior feedback.",
+      literatureQC: {
+        noveltySignal: "similar_exists",
+        noveltyExplanation:
+          "Literature retrieval unavailable at generation time. Run /api/literature-qc once retrieval keys are configured.",
+        references: [],
+      },
+      modelFlow: {
+        retrieval: "unavailable",
+        validator: "unavailable",
+      },
+      priorFeedback,
+    };
+  }
+
+  const query = buildTavilySearchQuery(hypothesis);
+  const rawResults = await tavilySearchRaw(tavilyKey, query);
+  const qcResult = mapTavilyToQC({ results: rawResults });
+  const validatedQc = await validateLiteratureQcWithLlama({ hypothesis, qcResult, llama8Model });
+  return {
+    retrievalSummary:
+      "Plan generation is grounded in Tavily retrieval plus Llama 8B relevance validation before drafting.",
+    literatureQC: {
+      noveltySignal: validatedQc.noveltySignal,
+      noveltyExplanation: validatedQc.noveltyExplanation,
+      references: validatedQc.references,
+    },
+    modelFlow: validatedQc.modelFlow,
+    priorFeedback,
+  };
+}
+
+function runSafetyChecks({ hypothesis, plan }) {
+  const raw = JSON.stringify(plan || {}).toLowerCase();
+  const alerts = [];
+  const highRiskTerms = ["human challenge", "gain-of-function", "aerosolized pathogen", "select agent"];
+  for (const term of highRiskTerms) {
+    if (raw.includes(term) || String(hypothesis || "").toLowerCase().includes(term)) {
+      alerts.push(`Detected high-risk term "${term}".`);
+    }
+  }
+
+  const hasReviewGate =
+    raw.includes("institutional biosafety committee") ||
+    raw.includes("irb approval") ||
+    raw.includes("ethics approval");
+  if (alerts.length > 0 && !hasReviewGate) {
+    return {
+      ok: false,
+      reason:
+        "Plan flagged as high-risk and missing required institutional review controls (IRB/IBC/Ethics).",
+    };
+  }
+  return { ok: true };
 }
 
 app.get("/health", (_req, res) => {
@@ -467,99 +626,9 @@ app.post("/api/literature-qc", async (req, res) => {
     const tavilyData = await tavilyResp.json();
     const qcResult = mapTavilyToQC(tavilyData);
 
-    // Required by product design: Tavily retrieval + Llama 8B validation for relevance/novelty.
     const llama8Model = process.env.LLAMA8_MODEL || "llama-3.1-8b-instant";
-    const verificationPrompt = `You are a strict scientific retrieval validator.
-Given a hypothesis and Tavily results, return ONLY JSON with:
-{
-  "noveltySignal":"not_found|similar_exists|exact_match",
-  "noveltyExplanation":"string",
-  "references":[
-    {
-      "title":"string",
-      "authors":"string",
-      "journal":"string",
-      "year":2024,
-      "doi":"string",
-      "relevance":"string",
-      "url":"string",
-      "validationStatus":"validated|weak_match",
-      "confidence":0.0
-    }
-  ]
-}
-Rules:
-- Keep 1-3 references.
-- Choose only papers/sources that are actually relevant to the hypothesis.
-- If uncertain, mark validationStatus as weak_match and lower confidence.
-
-Hypothesis:
-${hypothesis}
-
-Tavily base extraction:
-${JSON.stringify(qcResult).slice(0, 45000)}
-`;
-
-    let validated = null;
-    let validatorError = "";
-    try {
-      const validator = await chatLlamaWithFallback({
-        preferredModel: llama8Model,
-        system: "You verify whether retrieved scientific papers match the hypothesis. Return strict JSON only.",
-        user: verificationPrompt,
-        temperature: 0.1,
-        fallbackModels: ["llama-3.1-8b-instant", "llama3-8b-8192"],
-      });
-      const raw = validator.text;
-      validated = extractJsonObject(raw);
-      if (validated) {
-        validated.__validatorModel = validator.model;
-      }
-    } catch (e) {
-      validatorError = e instanceof Error ? e.message : String(e);
-      validated = null;
-    }
-
-    if (validated && Array.isArray(validated.references)) {
-      return res.json({
-        noveltySignal: validated.noveltySignal || qcResult.noveltySignal,
-        noveltyExplanation: validated.noveltyExplanation || qcResult.noveltyExplanation,
-        references: validated.references.map((r) => ({
-          validationStatus: r.validationStatus === "validated" ? "validated" : "weak_match",
-          title: r.title || "Untitled source",
-          authors: r.authors || "Source metadata unavailable",
-          journal: r.journal || "Web source",
-          year: Number.isFinite(Number(r.year)) ? Number(r.year) : new Date().getFullYear(),
-          doi: r.doi || "N/A",
-          relevance: r.relevance || "Relevance validated by Llama 8B.",
-          url: r.url || "#",
-          confidence: confidenceForStatus(
-            r.validationStatus === "validated" ? "validated" : "weak_match",
-            typeof r.confidence === "number" ? r.confidence : r.score,
-            0.6,
-          ),
-        })).slice(0, 3),
-        modelFlow: {
-          retrieval: "tavily",
-          validator: validated.__validatorModel || llama8Model,
-          validatorError: validatorError || undefined,
-        },
-      });
-    }
-
-    return res.json({
-      ...qcResult,
-      references: qcResult.references.map((r) => ({
-        ...r,
-        validationStatus: "weak_match",
-        confidence: confidenceForStatus("weak_match", r.score, 0.55),
-      })),
-      modelFlow: {
-        retrieval: "tavily",
-        validator: "llama8-unavailable",
-        validatorError: validatorError || "Llama validator returned no parseable JSON.",
-      },
-    });
+    const validatedQc = await validateLiteratureQcWithLlama({ hypothesis, qcResult, llama8Model });
+    return res.json(validatedQc);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected server error.";
     return res.status(500).json({ error: message });
@@ -617,25 +686,12 @@ app.post("/api/experiment-plan", async (req, res) => {
       rawGeminiModel === "gemini-1.5-pro-latest" || rawGeminiModel === "gemini-1.5-pro"
         ? "gemini-1.5-flash"
         : rawGeminiModel;
-    const retrievalPacket = {
-      retrievalSummary:
-        "No external retrieval used for this endpoint. Plan is generated from hypothesis + prior scientist feedback only.",
-      literatureQC: {
-        noveltySignal: "similar_exists",
-        noveltyExplanation:
-          "External literature retrieval is disabled for /api/experiment-plan. Use /api/literature-qc for validated retrieval.",
-        references: [],
-      },
-      verificationSources: {
-        protocol: [],
-        materials: [],
-        budget: [],
-        timeline: [],
-        validation: [],
-        safety: [],
-      },
+    const retrievalPacket = await buildLiteratureRetrievalPacket({
+      hypothesis: baseHypo,
+      tavilyKey,
+      llama8Model,
       priorFeedback,
-    };
+    });
 
     const planPrompt = buildPlanPrompt({ hypothesis: baseHypo, retrievalPacket });
     let planRaw;
@@ -671,7 +727,6 @@ app.post("/api/experiment-plan", async (req, res) => {
       return res.status(502).json({ error: "Plan model output could not be parsed as JSON." });
     }
 
-    // Plan is model-generated. Tavily is used only after generation for real citation links.
     const modelMaterials = Array.isArray(plan?.experimentPlan?.materials) ? plan.experimentPlan.materials : [];
     const rawSources = await fetchVerificationSourcesFromTavily({
       tavilyKey,
@@ -685,15 +740,32 @@ app.post("/api/experiment-plan", async (req, res) => {
       sources: rawSources,
       llama8Model,
     });
-    if (!plan.literatureQC) {
+    if (!plan.literatureQC || !hasMeaningfulReferences(plan.literatureQC.references)) {
       plan.literatureQC = retrievalPacket.literatureQC;
+    }
+
+    const safetyCheck = runSafetyChecks({ hypothesis: baseHypo, plan });
+    if (!safetyCheck.ok) {
+      return res.status(422).json({
+        error: "Plan requires human safety review before release.",
+        details: safetyCheck.reason,
+      });
     }
 
     return res.json({
       version: 1,
       modelFlow: {
-        retrievalModel: `source-check:${llama8Model}`,
+        retrievalModel: `${retrievalPacket.modelFlow?.retrieval || "tavily"} + source-check:${llama8Model}`,
         planningModel,
+      },
+      feedbackSummary: {
+        priorFeedbackCount: Array.isArray(priorFeedback) ? priorFeedback.length : 0,
+        appliedHighlights: Array.isArray(priorFeedback)
+          ? priorFeedback
+              .flatMap((f) => Object.values(f?.corrections || {}))
+              .filter((c) => typeof c === "string" && c.trim().length > 0)
+              .slice(0, 3)
+          : [],
       },
       plan,
     });
@@ -703,7 +775,12 @@ app.post("/api/experiment-plan", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Backend running at http://localhost:${PORT}`);
-});
+const isDirectRun = process.argv[1] && process.argv[1].endsWith("server.js");
+if (isDirectRun) {
+  app.listen(PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Backend running at http://localhost:${PORT}`);
+  });
+}
+
+export { app };
