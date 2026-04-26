@@ -37,6 +37,8 @@ export interface NoveltyDiagnostics {
   topTrigramSimilarity?: number;
   /** Fused hypothesis↔reference score after rerank. */
   topCombinedEvidence?: number;
+  /** When OpenAI embeddings are configured, max cosine(hypothesis, ref). */
+  topEmbeddingSimilarity?: number;
   /** Max trigram alignment between protocol skeleton text and retrieval hits. */
   protocolToPacketAlignment?: number;
   rerankMethod?: string;
@@ -52,12 +54,13 @@ export interface NoveltyDiagnostics {
     hypothesisTokenOverlap: number;
     trigramSimilarity?: number;
     protocolTrigramAlignment?: number;
+    embeddingSimilarity?: number | null;
     combinedEvidenceScore?: number;
     hostKind: string;
   }>;
 }
 
-/** Server-computed A/B style feedback vs counterfactual quality note (same plan, rubric-derived). */
+/** Server-computed learning metrics: heuristic adoption + optional dual-LLM arm. */
 export interface FeedbackLearningReport {
   version: number;
   enabled: boolean;
@@ -72,11 +75,24 @@ export interface FeedbackLearningReport {
     matchedSamples?: string[];
     missedSamples?: string[];
   } | null;
-  qualityComparison?: {
+  /** Same-plan rubric proxy from phrase adoption (no second generation). */
+  heuristicQualityComparison?: {
     scoreAfterFeedback: number;
     counterfactualScoreIfCorrectionsIgnored: number;
     estimatedQualityDeltaFromFeedback: number;
   } | null;
+  /** Present when the server ran a full second plan without prior-feedback in the prompt. */
+  dualLlmGeneration?: {
+    scoreWithoutPriorReviews: number;
+    scoreWithPriorReviews: number;
+    deltaWithPriorMinusWithout: number;
+    latencyMs?: number;
+    planningModelWithoutPrior?: string;
+    gatesPassedWithoutPrior?: boolean;
+    note?: string;
+    attempted?: boolean;
+    error?: string;
+  };
 }
 
 /** Live web hit used to cross-check plan assumptions (from Tavily). */
@@ -218,8 +234,8 @@ export interface FullPlan {
   domain: string;
   /** Optional Tavily-backed links per section for verification before ordering / execution */
   verificationSources?: PlanVerificationSources;
-  /** AI reasoning trace for transparency */
-  reasoning: {
+  /** AI reasoning trace for transparency (server normalizes to root; may be absent on stale cached plans). */
+  reasoning?: {
     repositoriesConsulted: string[];
     budgetMethodology: string;
     literatureInfluence: string;

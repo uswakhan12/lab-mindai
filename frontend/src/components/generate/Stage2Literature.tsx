@@ -217,6 +217,14 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
                   </span>
                 </div>
               ) : null}
+              {typeof result.noveltyDiagnostics.topEmbeddingSimilarity === "number" ? (
+                <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
+                  Embed sim{" "}
+                  <span className="font-mono text-foreground">
+                    {result.noveltyDiagnostics.topEmbeddingSimilarity.toFixed(2)}
+                  </span>
+                </div>
+              ) : null}
               {typeof result.noveltyDiagnostics.protocolToPacketAlignment === "number" ? (
                 <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
                   Protocol↔packet{" "}
@@ -268,6 +276,9 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
                       overlap {(diag.hypothesisTokenOverlap * 100).toFixed(0)}%
                       {typeof diag.trigramSimilarity === "number"
                         ? ` · tri ${diag.trigramSimilarity.toFixed(2)}`
+                        : ""}
+                      {typeof diag.embeddingSimilarity === "number"
+                        ? ` · emb ${diag.embeddingSimilarity.toFixed(2)}`
                         : ""}
                     </Badge>
                   ) : null}

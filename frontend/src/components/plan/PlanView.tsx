@@ -339,40 +339,106 @@ export function PlanView({
 
       {feedbackSummary?.feedbackLearningReport?.enabled ? (
         <div
-          className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-sm space-y-2"
+          className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-sm space-y-3"
           data-print-hide
         >
           <p className="text-xs font-semibold uppercase tracking-widest text-cyan-200/90">
-            Learning loop — measured vs counterfactual
+            Learning loop — metrics
           </p>
-          {feedbackSummary.feedbackLearningReport.qualityComparison ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-              <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
-                <p className="text-muted-foreground">Observed rubric score</p>
-                <p className="font-mono text-lg text-foreground">
-                  {feedbackSummary.feedbackLearningReport.qualityComparison.scoreAfterFeedback.toFixed(
-                    2,
-                  )}
-                  <span className="text-muted-foreground text-sm">/10</span>
-                </p>
+          {feedbackSummary.feedbackLearningReport.dualLlmGeneration &&
+          typeof feedbackSummary.feedbackLearningReport.dualLlmGeneration
+            .scoreWithoutPriorReviews === "number" ? (
+            <div className="rounded-lg border border-cyan-400/20 bg-background/30 p-3 space-y-2">
+              <p className="text-[11px] font-medium text-cyan-100/95">Dual LLM arm (true A/B)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="rounded-md border border-border/60 bg-background/40 px-2 py-1.5">
+                  <p className="text-muted-foreground">Without prior reviews</p>
+                  <p className="font-mono text-foreground text-base">
+                    {feedbackSummary.feedbackLearningReport.dualLlmGeneration.scoreWithoutPriorReviews.toFixed(
+                      2,
+                    )}
+                    /10
+                  </p>
+                </div>
+                <div className="rounded-md border border-border/60 bg-background/40 px-2 py-1.5">
+                  <p className="text-muted-foreground">With prior reviews (shipped)</p>
+                  <p className="font-mono text-foreground text-base">
+                    {feedbackSummary.feedbackLearningReport.dualLlmGeneration.scoreWithPriorReviews.toFixed(
+                      2,
+                    )}
+                    /10
+                  </p>
+                </div>
+                <div className="rounded-md border border-border/60 bg-background/40 px-2 py-1.5">
+                  <p className="text-muted-foreground">Δ (with − without)</p>
+                  <p className="font-mono text-cyan-100 text-base">
+                    {feedbackSummary.feedbackLearningReport.dualLlmGeneration
+                      .deltaWithPriorMinusWithout >= 0
+                      ? "+"
+                      : ""}
+                    {feedbackSummary.feedbackLearningReport.dualLlmGeneration.deltaWithPriorMinusWithout.toFixed(
+                      2,
+                    )}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
-                <p className="text-muted-foreground">Counterfactual (no adoption credit)</p>
-                <p className="font-mono text-lg text-foreground">
-                  {feedbackSummary.feedbackLearningReport.qualityComparison.counterfactualScoreIfCorrectionsIgnored.toFixed(
-                    2,
-                  )}
-                  <span className="text-muted-foreground text-sm">/10</span>
+              {feedbackSummary.feedbackLearningReport.dualLlmGeneration
+                .planningModelWithoutPrior ? (
+                <p className="text-[10px] text-muted-foreground font-mono">
+                  Shadow model:{" "}
+                  {
+                    feedbackSummary.feedbackLearningReport.dualLlmGeneration
+                      .planningModelWithoutPrior
+                  }{" "}
+                  · {feedbackSummary.feedbackLearningReport.dualLlmGeneration.latencyMs ?? "—"} ms
                 </p>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
-                <p className="text-muted-foreground">Δ attributed to feedback text</p>
-                <p className="font-mono text-lg text-cyan-100">
-                  +
-                  {feedbackSummary.feedbackLearningReport.qualityComparison.estimatedQualityDeltaFromFeedback.toFixed(
-                    2,
-                  )}
+              ) : null}
+              {feedbackSummary.feedbackLearningReport.dualLlmGeneration.note ? (
+                <p className="text-[10px] text-muted-foreground/90 leading-relaxed">
+                  {feedbackSummary.feedbackLearningReport.dualLlmGeneration.note}
                 </p>
+              ) : null}
+            </div>
+          ) : feedbackSummary.feedbackLearningReport.dualLlmGeneration?.attempted &&
+            feedbackSummary.feedbackLearningReport.dualLlmGeneration.error ? (
+            <p className="text-xs text-amber-400/90">
+              Dual LLM arm attempted but failed:{" "}
+              {feedbackSummary.feedbackLearningReport.dualLlmGeneration.error}
+            </p>
+          ) : null}
+          {feedbackSummary.feedbackLearningReport.heuristicQualityComparison ? (
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">
+                Heuristic adoption (same plan)
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                  <p className="text-muted-foreground">Observed rubric score</p>
+                  <p className="font-mono text-lg text-foreground">
+                    {feedbackSummary.feedbackLearningReport.heuristicQualityComparison.scoreAfterFeedback.toFixed(
+                      2,
+                    )}
+                    <span className="text-muted-foreground text-sm">/10</span>
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                  <p className="text-muted-foreground">Counterfactual (no adoption credit)</p>
+                  <p className="font-mono text-lg text-foreground">
+                    {feedbackSummary.feedbackLearningReport.heuristicQualityComparison.counterfactualScoreIfCorrectionsIgnored.toFixed(
+                      2,
+                    )}
+                    <span className="text-muted-foreground text-sm">/10</span>
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                  <p className="text-muted-foreground">Δ attributed to feedback text</p>
+                  <p className="font-mono text-lg text-cyan-100">
+                    +
+                    {feedbackSummary.feedbackLearningReport.heuristicQualityComparison.estimatedQualityDeltaFromFeedback.toFixed(
+                      2,
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
           ) : null}

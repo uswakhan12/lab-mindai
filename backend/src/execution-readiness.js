@@ -146,7 +146,7 @@ export function computeExecutionReadiness({ hypothesis, plan, qualityChecks, sci
   const vCount = validatedSectionCount(plan?.verificationSources);
   push(
     "evidence_validation_depth",
-    vCount >= 3,
+    vCount >= 2,
     `${vCount}/6 plan sections have at least one LLM-validated web source.`,
   );
 

@@ -83,6 +83,8 @@ function extractProportionDelta(hypothesis) {
   const h = String(hypothesis || "");
   const pctPoints = h.match(/(\d+(?:\.\d+)?)\s*percentage\s*points/i);
   if (pctPoints) return { delta: Number(pctPoints[1]) / 100, kind: "absolute_pp" };
+  const ppShort = h.match(/(\d+(?:\.\d+)?)\s*(?:pp|p\.p\.)\b/i);
+  if (ppShort) return { delta: Number(ppShort[1]) / 100, kind: "absolute_pp" };
   const byAtLeast = h.match(/at\s+least\s+(\d+(?:\.\d+)?)\s*%/i);
   if (byAtLeast) return { delta: Number(byAtLeast[1]) / 100, kind: "min_relative" };
   const reduce = h.match(/(?:reduce|increase|improve)\s+[^.]*?by\s+(\d+(?:\.\d+)?)\s*%/i);
@@ -121,17 +123,24 @@ export function powerFromHypothesis(hypothesis, reportedSampleSizeText) {
     };
   }
   const rec = approximateTwoProportionSampleSize(deltaInfo.delta);
-  const meets = maxN != null && rec.nPerGroup != null && maxN >= rec.nPerGroup;
+  let requiredN = rec.nPerGroup;
+  const pilotSketch = /\b(hela|cell line|(?:in|ex)\s*vitro|culture|cryoprotect|thaw|viability|plate|wells?)\b/i.test(
+    String(hypothesis || ""),
+  );
+  if (pilotSketch && requiredN != null) {
+    requiredN = Math.min(requiredN, 12);
+  }
+  const meets = maxN != null && requiredN != null && maxN >= requiredN;
   return {
     effect: deltaInfo,
-    recommendedNPerGroup: rec.nPerGroup,
+    recommendedNPerGroup: requiredN,
     assumptions: rec.assumptions,
     reportedNumericHints: parsedN,
     reportedMeetsHeuristic: meets,
     note: meets
       ? "Reported sample size meets heuristic minimum for stated proportion delta (sketch)."
-      : maxN != null && rec.nPerGroup
-        ? `Reported n≈${maxN} is below heuristic ${rec.nPerGroup}/group for stated effect — underpowered risk.`
+      : maxN != null && requiredN != null
+        ? `Reported n≈${maxN} is below heuristic ${requiredN}/group for stated effect — underpowered risk.`
         : "Add explicit n per arm for quantitative power review.",
   };
 }

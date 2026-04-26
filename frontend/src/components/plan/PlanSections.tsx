@@ -308,6 +308,17 @@ export function SafetyTab({ plan }: { plan: FullPlan }) {
 
 export function ReasoningPanel({ plan }: { plan: FullPlan }) {
   const [open, setOpen] = useState(false);
+  const reasoning = plan.reasoning;
+  const repos = Array.isArray(reasoning?.repositoriesConsulted) ? reasoning.repositoriesConsulted : [];
+  const confidence = Array.isArray(reasoning?.confidence) ? reasoning.confidence : [];
+  const budgetMethodology =
+    typeof reasoning?.budgetMethodology === "string" && reasoning.budgetMethodology.trim()
+      ? reasoning.budgetMethodology
+      : "—";
+  const literatureInfluence =
+    typeof reasoning?.literatureInfluence === "string" && reasoning.literatureInfluence.trim()
+      ? reasoning.literatureInfluence
+      : "—";
   return (
     <details
       open={open}
@@ -328,11 +339,15 @@ export function ReasoningPanel({ plan }: { plan: FullPlan }) {
             Repositories consulted
           </p>
           <ul className="text-sm space-y-1">
-            {plan.reasoning.repositoriesConsulted.map((r, i) => (
-              <li key={i} className="text-foreground/80">
-                ▸ {r}
-              </li>
-            ))}
+            {repos.length === 0 ? (
+              <li className="text-muted-foreground text-sm">No repositories listed for this draft.</li>
+            ) : (
+              repos.map((r, i) => (
+                <li key={i} className="text-foreground/80">
+                  ▸ {r}
+                </li>
+              ))
+            )}
           </ul>
         </div>
         <div>
@@ -340,7 +355,7 @@ export function ReasoningPanel({ plan }: { plan: FullPlan }) {
             Budget methodology
           </p>
           <p className="text-sm text-foreground/85 leading-relaxed">
-            {plan.reasoning.budgetMethodology}
+            {budgetMethodology}
           </p>
         </div>
         <div>
@@ -348,7 +363,7 @@ export function ReasoningPanel({ plan }: { plan: FullPlan }) {
             Literature influence
           </p>
           <p className="text-sm text-foreground/85 leading-relaxed">
-            {plan.reasoning.literatureInfluence}
+            {literatureInfluence}
           </p>
         </div>
         <div>
@@ -356,25 +371,29 @@ export function ReasoningPanel({ plan }: { plan: FullPlan }) {
             Confidence by section
           </p>
           <div className="space-y-2">
-            {plan.reasoning.confidence.map((c, i) => (
-              <div key={i} className="flex items-start justify-between gap-3 text-sm">
-                <div className="flex-1">
-                  <span className="font-medium">{c.section}</span>
-                  <span className="text-muted-foreground"> — {c.reason}</span>
+            {confidence.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No per-section confidence breakdown.</p>
+            ) : (
+              confidence.map((c, i) => (
+                <div key={i} className="flex items-start justify-between gap-3 text-sm">
+                  <div className="flex-1">
+                    <span className="font-medium">{c.section}</span>
+                    <span className="text-muted-foreground"> — {c.reason}</span>
+                  </div>
+                  <Badge
+                    className={
+                      c.level === "High"
+                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                        : c.level === "Medium"
+                          ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                          : "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                    }
+                  >
+                    {c.level}
+                  </Badge>
                 </div>
-                <Badge
-                  className={
-                    c.level === "High"
-                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-                      : c.level === "Medium"
-                        ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                        : "bg-rose-500/15 text-rose-300 border-rose-500/30"
-                  }
-                >
-                  {c.level}
-                </Badge>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

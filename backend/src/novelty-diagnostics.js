@@ -87,7 +87,7 @@ function protocolSkeletonText(experimentPlan) {
  * @param {string} hypothesis
  * @param {Array<{ title?: string, relevance?: string, url?: string, score?: number }>} references
  * @param {string} noveltySignal - existing coarse signal
- * @param {{ experimentPlan?: object }} [options]
+ * @param {{ experimentPlan?: object, embeddingCosineByIndex?: (number|null)[] }} [options]
  */
 export function buildNoveltyDiagnostics(hypothesis, references, noveltySignal, options = {}) {
   const refs = Array.isArray(references) ? references : [];
@@ -95,6 +95,9 @@ export function buildNoveltyDiagnostics(hypothesis, references, noveltySignal, o
   const hypoTri = trigramCounts(hypothesis);
   const protocolSk = protocolSkeletonText(options.experimentPlan);
   const protoTri = protocolSk ? trigramCounts(protocolSk) : null;
+
+  const embArr = Array.isArray(options.embeddingCosineByIndex) ? options.embeddingCosineByIndex : null;
+  const hasEmbedding = Boolean(embArr && embArr.some((v) => typeof v === "number" && Number.isFinite(v)));
 
   const perReference = refs.map((r, i) => {
     const blob = `${r?.title || ""} ${r?.relevance || ""}`;
@@ -106,8 +109,17 @@ export function buildNoveltyDiagnostics(hypothesis, references, noveltySignal, o
     const protocolTrigramAlignment = protoTri
       ? Math.round(cosineTrigram(protoTri, refTri) * 1000) / 1000
       : 0;
-    const combinedEvidenceScore =
-      Math.round((0.42 * Math.min(1, score) + 0.38 * trigramSimilarity + 0.2 * overlap) * 1000) / 1000;
+    const rawEmb = embArr && typeof embArr[i] === "number" && Number.isFinite(embArr[i]) ? embArr[i] : null;
+    const embeddingSimilarity = rawEmb != null ? Math.max(0, Math.min(1, rawEmb)) : null;
+    const combinedEvidenceScore = hasEmbedding
+      ? Math.round(
+          (0.26 * Math.min(1, score) +
+            0.24 * trigramSimilarity +
+            0.14 * overlap +
+            0.36 * (embeddingSimilarity ?? 0)) *
+            1000,
+        ) / 1000
+      : Math.round((0.42 * Math.min(1, score) + 0.38 * trigramSimilarity + 0.2 * overlap) * 1000) / 1000;
     return {
       index: i,
       title: r?.title || "Untitled",
@@ -116,6 +128,7 @@ export function buildNoveltyDiagnostics(hypothesis, references, noveltySignal, o
       hypothesisTokenOverlap: Math.round(overlap * 1000) / 1000,
       trigramSimilarity,
       protocolTrigramAlignment,
+      embeddingSimilarity,
       combinedEvidenceScore,
       hostKind: hostKind(r?.url),
     };
@@ -124,6 +137,12 @@ export function buildNoveltyDiagnostics(hypothesis, references, noveltySignal, o
   const topScore = perReference.length ? Math.max(...perReference.map((p) => p.retrievalScore)) : 0;
   const topOverlap = perReference.length ? Math.max(...perReference.map((p) => p.hypothesisTokenOverlap)) : 0;
   const topTrigramSimilarity = perReference.length ? Math.max(...perReference.map((p) => p.trigramSimilarity)) : 0;
+  const topEmbeddingSimilarity = perReference.length
+    ? Math.max(
+        0,
+        ...perReference.map((p) => (typeof p.embeddingSimilarity === "number" ? p.embeddingSimilarity : 0)),
+      )
+    : 0;
   const topCombinedEvidence = perReference.length ? Math.max(...perReference.map((p) => p.combinedEvidenceScore)) : 0;
   const protocolToPacketAlignment = perReference.length
     ? Math.round(Math.max(...perReference.map((p) => p.protocolTrigramAlignment)) * 1000) / 1000
@@ -142,7 +161,7 @@ export function buildNoveltyDiagnostics(hypothesis, references, noveltySignal, o
     rulesTriggered.push("No retrieval hits passed validation — treat novelty as uncertain.");
   } else {
     rulesTriggered.push(
-      `Evidence fusion: max(tavily, combined)≈${Math.round(tierScore * 1000) / 1000}; trigram top=${topTrigramSimilarity}; protocol↔packet=${protocolToPacketAlignment}.`,
+      `Evidence fusion: max(tavily, combined)≈${Math.round(tierScore * 1000) / 1000}; trigram top=${topTrigramSimilarity};${hasEmbedding ? ` OpenAI embed top=${topEmbeddingSimilarity};` : ""} protocol↔packet=${protocolToPacketAlignment}.`,
     );
     if (tierScore + structureBoost >= 0.92 && (hasProtocolHost || topOverlap >= 0.35 || protocolToPacketAlignment >= 0.22)) {
       evidenceTier = "exact_or_near_protocol";
@@ -180,7 +199,10 @@ export function buildNoveltyDiagnostics(hypothesis, references, noveltySignal, o
     topTrigramSimilarity,
     topCombinedEvidence: Math.round(topCombinedEvidence * 1000) / 1000,
     protocolToPacketAlignment,
-    rerankMethod: "trigram_cosine_fusion+v0.42tavily",
+    topEmbeddingSimilarity: hasEmbedding ? Math.round(topEmbeddingSimilarity * 1000) / 1000 : undefined,
+    rerankMethod: hasEmbedding
+      ? "openai_text_embedding_3_small+trigram+tavily_fusion"
+      : "trigram_cosine_fusion+v0.42tavily",
     hasProtocolRepositoryHit: hasProtocolHost,
     hasVendorOrResourceHit: hasVendor,
     rulesTriggered,
