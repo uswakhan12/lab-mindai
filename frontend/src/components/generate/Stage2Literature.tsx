@@ -300,32 +300,30 @@ export function Stage2Literature({ onComplete, suspended = false }: Props) {
           When you are happy with the literature readout, start plan generation. You can re-run checks
           without losing your current hypothesis{sessionKey ? " and literature session" : ""}.
         </p>
-        <div className="inline-flex w-full sm:w-auto flex-col items-center">
-          <div className="inline-flex w-full sm:w-72 sm:justify-center min-w-0 max-w-md flex-col sm:flex-row gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => bumpS2Rerun()}
-              className="w-full h-8 rounded-md border text-xs"
-              data-testid="stage2-run-lit-qc"
-            >
-              Run literature QC
-            </Button>
-            <div className="w-full min-w-0 sm:flex-1">
-              <div className="w-full h-6 flex items-stretch justify-stretch p-[1px] rounded-md bg-zinc-800">
-                <Button
-                  type="button"
-                  onClick={onComplete}
-                  disabled={s2Loading || s3Loading}
-                  className="h-full w-full min-w-0 text-[0.6rem] sm:text-sm rounded-[6px] btn-cta leading-tight"
-                  data-testid="stage2-generate-experiment"
-                >
-                  {s2Loading && (
-                    <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 animate-spin" />
-                  )}
-                  {s3Loading ? "Generating plan…" : "Generate next-step experiment plan"}
-                </Button>
-              </div>
+        <div className="w-full max-w-2xl mx-auto flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-stretch sm:gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => bumpS2Rerun()}
+            className="h-9 shrink-0 w-full min-w-0 rounded-md border text-xs sm:flex-1"
+            data-testid="stage2-run-lit-qc"
+          >
+            Run literature QC
+          </Button>
+          <div className="min-w-0 flex-1">
+            <div className="flex h-9 w-full items-stretch rounded-md bg-zinc-800 p-px">
+              <Button
+                type="button"
+                onClick={onComplete}
+                disabled={s2Loading || s3Loading}
+                className="h-full w-full min-w-0 rounded-[6px] px-2 text-xs leading-tight sm:text-sm btn-cta"
+                data-testid="stage2-generate-experiment"
+              >
+                {s2Loading && (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin" />
+                )}
+                {s3Loading ? "Generating plan…" : "Generate next-step experiment plan"}
+              </Button>
             </div>
           </div>
         </div>
