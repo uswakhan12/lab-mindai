@@ -13,6 +13,15 @@
 [![Backend](https://img.shields.io/badge/backend-Express-000000?logo=express)](https://expressjs.com/)
 [![Frontend](https://img.shields.io/badge/frontend-React%2019-61DAFB?logo=react)](https://react.dev/)
 
+## Live demo
+
+| | Link |
+|---|------|
+| **Web app** (Cloudflare Workers) | [https://tanstack-start-app.labmind.workers.dev](https://tanstack-start-app.labmind.workers.dev) |
+| **API** (Render) | [https://lab-mindai.onrender.com](https://lab-mindai.onrender.com) · [GET `/health`](https://lab-mindai.onrender.com/health) |
+
+Replace these URLs if you deploy under your own Worker / Render service names.
+
 > **Hackathon lineage:** Built around the *AI Scientist* style challenge — compress “hypothesis → runnable lab work” (protocol, materials, budget, timeline, validation) with a literature novelty gate and optional scientist feedback loop.
 
 **Documentation note:** Some authoring prompts ask for extremely long single-file READMEs. This document is **dense and repo-accurate** rather than padded to an arbitrary line count. Split handbooks under `docs/` are **not yet implemented** (TODO).
@@ -20,6 +29,8 @@
 ---
 
 ## Table of contents
+
+**Live demo:** [Web app](https://tanstack-start-app.labmind.workers.dev) · [API](https://lab-mindai.onrender.com) · [`/health`](https://lab-mindai.onrender.com/health)
 
 1. [Overview](#overview)
 2. [Problem statement](#problem-statement)
@@ -133,6 +144,8 @@ Organisations brief specialist labs to estimate **protocol**, **reagents**, **co
 ---
 
 ## Screenshots & demo
+
+**Hosted demo:** [Web app](https://tanstack-start-app.labmind.workers.dev) · [API](https://lab-mindai.onrender.com) · [`GET /health`](https://lab-mindai.onrender.com/health) (see [Live demo](#live-demo) at the top of this README).
 
 | Asset | Status |
 |-------|--------|
