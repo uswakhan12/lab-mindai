@@ -3,7 +3,7 @@ import { analyzeHypothesis } from "@/lib/analyzeHypothesis";
 import { fetchModelGeneratedPlan } from "@/lib/fetchModelGeneratedPlan";
 import { useGenerateStore } from "@/lib/generateStore";
 import type { LiteratureQCResult } from "@/lib/generateTypes";
-import { addToHistory } from "@/lib/storage";
+import { addToHistory, labmindApiHeaders } from "@/lib/storage";
 import { PLAN_LOADING_STEPS } from "@/lib/planLoadingSteps";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
@@ -119,7 +119,7 @@ export function GeneratePipelineRunner() {
       try {
         const response = await fetch(`${BACKEND_URL}/api/literature-qc`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: labmindApiHeaders(),
           body: JSON.stringify({ hypothesis: sessionKey }),
           signal: ac.signal,
         });
@@ -185,6 +185,10 @@ export function GeneratePipelineRunner() {
     st.setS3GenInterrupted(false);
     st.setS3StepIdx(0);
     st.setS3Error("");
+    st.setS3FeedbackSummary(undefined);
+    st.setS3QualityChecks(undefined);
+    st.setS3ScientificMechanistic(undefined);
+    st.setS3ExecutionReadiness(undefined);
     st.setS3PipelinePhase("loading");
 
     const stepInterval = setInterval(() => {
@@ -234,6 +238,10 @@ export function GeneratePipelineRunner() {
         addToHistory(sessionKey, generated.plan);
         const g = useGenerateStore.getState();
         g.setS3ModelFlow(generated.modelFlow);
+        g.setS3FeedbackSummary(generated.feedbackSummary);
+        g.setS3QualityChecks(generated.qualityChecks);
+        g.setS3ScientificMechanistic(generated.scientificMechanistic);
+        g.setS3ExecutionReadiness(generated.executionReadiness);
         g.setS3Plan(generated.plan);
         g.setS3PipelinePhase("ready");
       } catch (e) {

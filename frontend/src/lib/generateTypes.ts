@@ -1,4 +1,4 @@
-import type { FullPlan } from "@/types/plan";
+import type { FullPlan, NoveltyDiagnostics } from "@/types/plan";
 
 export interface HypothesisAnalysis {
   intervention: string;
@@ -14,6 +14,8 @@ export interface Reference {
   year: number;
   doi: string;
   relevance: string;
+  /** May be set by the literature QC API instead of or in addition to `relevance`. */
+  snippet?: string;
   url?: string;
   validationStatus?: "validated" | "weak_match";
   confidence?: number;
@@ -24,11 +26,13 @@ export interface LiteratureQCResult {
   noveltyExplanation: string;
   references: Reference[];
   modelFlow?: { retrieval?: string; validator?: string };
+  noveltyDiagnostics?: NoveltyDiagnostics;
 }
 
 export interface ModelFlowMeta {
   retrievalModel?: string;
   planningModel?: string;
+  retrievalOutlineUsed?: boolean;
 }
 
 export type S3StorePhase = "idle" | "loading" | "ready" | "error";

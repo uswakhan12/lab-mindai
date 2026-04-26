@@ -2,6 +2,18 @@
 // All functions are SSR-safe (return defaults when window is undefined).
 
 import type { FullPlan } from "@/types/plan";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+
+/** Headers for secured backend routes (LABMIND_API_KEY) and multi-tenant isolation. */
+export function labmindApiHeaders(json = true): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (json) h["Content-Type"] = "application/json";
+  const key = import.meta.env.VITE_LABMIND_API_KEY as string | undefined;
+  if (key) h.Authorization = `Bearer ${key}`;
+  const tenant = import.meta.env.VITE_LABMIND_TENANT_ID as string | undefined;
+  if (tenant) h["x-tenant-id"] = tenant;
+  return h;
+}
 
 const HISTORY_KEY = "labmind:history:v1";
 const REVIEWS_KEY = "labmind:reviews:v1";
@@ -98,8 +110,30 @@ export function saveReview(review: Review): void {
   }
 }
 
+export async function saveReviewToBackend(review: Review): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/api/reviews`, {
+    method: "POST",
+    headers: labmindApiHeaders(),
+    body: JSON.stringify(review),
+  });
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || "Failed to save review to backend.");
+  }
+}
+
 export function getReviewsForDomain(domain: string): Review[] {
   return getReviews().filter((r) => r.domain === domain);
+}
+
+export async function fetchReviewsForDomain(domain: string, limit = 20): Promise<Review[]> {
+  const params = new URLSearchParams({ domain, limit: String(limit) });
+  const res = await fetch(`${BACKEND_URL}/api/reviews?${params.toString()}`, {
+    headers: labmindApiHeaders(false),
+  });
+  if (!res.ok) return [];
+  const payload = (await res.json().catch(() => ({}))) as { reviews?: Review[] };
+  return Array.isArray(payload.reviews) ? payload.reviews : [];
 }
 
 export function clearReviews(): void {
@@ -113,7 +147,13 @@ export function buildFeedbackContext(domain: string): string | null {
   if (prior.length === 0) return null;
   const corrections: string[] = [];
   for (const r of prior.slice(0, 5)) {
-    for (const section of ["protocol", "materials", "budget", "timeline", "validation"] as ReviewSection[]) {
+    for (const section of [
+      "protocol",
+      "materials",
+      "budget",
+      "timeline",
+      "validation",
+    ] as ReviewSection[]) {
       if (r.corrections[section]?.trim()) {
         corrections.push(`- [${section}] ${r.corrections[section].trim()}`);
       }
@@ -139,7 +179,10 @@ export function cryptoRandomId(): string {
 /** Encode hypothesis as URL-safe base64 for shareable links. */
 export function encodeHypothesis(h: string): string {
   if (typeof btoa !== "undefined") {
-    return btoa(unescape(encodeURIComponent(h))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return btoa(unescape(encodeURIComponent(h)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
   }
   return encodeURIComponent(h);
 }

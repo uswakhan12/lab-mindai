@@ -18,10 +18,12 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
   const sorted = useMemo(() => {
     if (sortKey === "none") return materials;
     return [...materials].sort((a, b) => {
-      const av = a[sortKey], bv = b[sortKey];
-      const cmp = typeof av === "number" && typeof bv === "number"
-        ? av - bv
-        : String(av).localeCompare(String(bv));
+      const av = a[sortKey],
+        bv = b[sortKey];
+      const cmp =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv));
       return asc ? cmp : -cmp;
     });
   }, [materials, sortKey, asc]);
@@ -33,16 +35,47 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
   }, [materials]);
 
   const total = materials.reduce((s, m) => s + m.totalCostUSD, 0);
+  const hasGrounding = materials.some(
+    (m) => m.grounding && typeof m.grounding.sourceUrl === "string",
+  );
+  const hasQuoteMeta = materials.some(
+    (m) => Boolean(m.lastVerifiedAt) || m.quoteSourceType != null || m.stalenessDays != null,
+  );
 
   const onSort = (key: SortKey) => {
     if (sortKey === key) setAsc(!asc);
-    else { setSortKey(key); setAsc(true); }
+    else {
+      setSortKey(key);
+      setAsc(true);
+    }
   };
 
   const exportCSV = () => {
-    const header = ["Item", "Specification", "Quantity", "Supplier", "Catalog #", "Unit Price USD", "Total USD", "Category", "Lead Time (weeks)"];
-    const rows = materials.map((m) => [m.item, m.specification, m.quantity, m.supplier, m.catalogNumber, m.unitPriceUSD, m.totalCostUSD, m.category, m.leadTimeWeeks]);
-    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const header = [
+      "Item",
+      "Specification",
+      "Quantity",
+      "Supplier",
+      "Catalog #",
+      "Unit Price USD",
+      "Total USD",
+      "Category",
+      "Lead Time (weeks)",
+    ];
+    const rows = materials.map((m) => [
+      m.item,
+      m.specification,
+      m.quantity,
+      m.supplier,
+      m.catalogNumber,
+      m.unitPriceUSD,
+      m.totalCostUSD,
+      m.category,
+      m.leadTimeWeeks,
+    ]);
+    const csv = [header, ...rows]
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -74,7 +107,13 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
         data-print-materials-card
       >
         <div className="overflow-x-auto" data-print-materials-scroll>
-          <table className="w-full text-sm min-w-[760px]" data-print-materials-table>
+          <table
+            className={cn(
+              "w-full text-sm",
+              hasGrounding || hasQuoteMeta ? "min-w-[1040px]" : "min-w-[760px]",
+            )}
+            data-print-materials-table
+          >
             <thead className="bg-card border-b border-amber-500/30 text-xs uppercase tracking-widest text-amber-200/85 light:text-amber-900/80">
               <tr>
                 <Th label="Item" onClick={() => onSort("item")} />
@@ -82,6 +121,8 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
                 <Th label="Qty" />
                 <Th label="Supplier" onClick={() => onSort("supplier")} />
                 <Th label="Catalog #" />
+                {hasGrounding ? <Th label="Packet provenance" /> : null}
+                {hasQuoteMeta ? <Th label="Quote freshness" /> : null}
                 <Th label="Unit $" onClick={() => onSort("unitPriceUSD")} align="right" />
                 <Th label="Total $" onClick={() => onSort("totalCostUSD")} align="right" />
                 <Th label="Lead" onClick={() => onSort("leadTimeWeeks")} align="right" />
@@ -97,12 +138,17 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
                       <p className="font-medium text-foreground">{m.item}</p>
                       <Badge
                         variant="outline"
-                        className={cn("mt-1 text-[10px] uppercase tracking-wider", MATERIAL_CATEGORY_BADGE[catIdx])}
+                        className={cn(
+                          "mt-1 text-[10px] uppercase tracking-wider",
+                          MATERIAL_CATEGORY_BADGE[catIdx],
+                        )}
                       >
                         {m.category}
                       </Badge>
                     </td>
-                    <td className="px-3 py-3 align-top text-muted-foreground text-xs leading-relaxed">{m.specification}</td>
+                    <td className="px-3 py-3 align-top text-muted-foreground text-xs leading-relaxed">
+                      {m.specification}
+                    </td>
                     <td className="px-3 py-3 align-top whitespace-nowrap">{m.quantity}</td>
                     <td className="px-3 py-3 align-top text-muted-foreground">{m.supplier}</td>
                     <td className="px-3 py-3 align-top">
@@ -114,8 +160,62 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
                         ⚠ Verify before ordering
                       </span>
                     </td>
-                    <td className="px-3 py-3 align-top text-right font-mono">${m.unitPriceUSD.toLocaleString()}</td>
-                    <td className="px-3 py-3 align-top text-right font-mono font-medium">${m.totalCostUSD.toLocaleString()}</td>
+                    {hasGrounding ? (
+                      <td className="px-3 py-3 align-top max-w-[200px] text-xs text-muted-foreground">
+                        {m.grounding?.sourceUrl && m.grounding.sourceUrl !== "PENDING" ? (
+                          <>
+                            <a
+                              href={m.grounding.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline break-all line-clamp-2"
+                            >
+                              {m.grounding.sourceTitle || "Ref"}
+                            </a>
+                            {m.grounding.confidence ? (
+                              <span className="block text-[10px] mt-0.5 text-foreground/70">
+                                {m.grounding.confidence} confidence
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground/80">PENDING</span>
+                        )}
+                      </td>
+                    ) : null}
+                    {hasQuoteMeta ? (
+                      <td className="px-3 py-3 align-top text-xs text-muted-foreground max-w-[160px]">
+                        {m.lastVerifiedAt ? (
+                          <span className="font-mono text-[10px] text-foreground/85 block">
+                            {String(m.lastVerifiedAt).slice(0, 10)}
+                          </span>
+                        ) : (
+                          <span className="text-amber-400/90">—</span>
+                        )}
+                        {m.quoteSourceType ? (
+                          <Badge
+                            variant="outline"
+                            className="mt-1 text-[9px] border-border font-normal"
+                          >
+                            {m.quoteSourceType}
+                          </Badge>
+                        ) : null}
+                        {typeof m.stalenessDays === "number" ? (
+                          <span className="block text-[10px] mt-0.5">
+                            {m.stalenessDays}d stale
+                            {m.stalenessDays > 90 ? (
+                              <AlertTriangle className="inline h-3 w-3 ml-0.5 text-amber-400" />
+                            ) : null}
+                          </span>
+                        ) : null}
+                      </td>
+                    ) : null}
+                    <td className="px-3 py-3 align-top text-right font-mono">
+                      ${m.unitPriceUSD.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-3 align-top text-right font-mono font-medium">
+                      ${m.totalCostUSD.toLocaleString()}
+                    </td>
                     <td className="px-3 py-3 align-top text-right">
                       <span
                         className={
@@ -146,7 +246,15 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
   );
 }
 
-function Th({ label, onClick, align = "left" }: { label: string; onClick?: () => void; align?: "left" | "right" }) {
+function Th({
+  label,
+  onClick,
+  align = "left",
+}: {
+  label: string;
+  onClick?: () => void;
+  align?: "left" | "right";
+}) {
   return (
     <th className={`px-3 py-2.5 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
       {onClick ? (

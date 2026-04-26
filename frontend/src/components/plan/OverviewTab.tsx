@@ -1,6 +1,6 @@
-import type { ExperimentPlan, FullPlan } from "@/types/plan";
+import type { ExecutionReadiness, ExperimentPlan, FullPlan } from "@/types/plan";
 import { Badge } from "@/components/ui/badge";
-import { Clock, DollarSign, Gauge, GraduationCap, Info } from "lucide-react";
+import { ClipboardCheck, Clock, DollarSign, Gauge, GraduationCap, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const difficultyTone: Record<ExperimentPlan["difficultyLevel"], string> = {
@@ -20,10 +20,18 @@ const expertiseBadgeStyles = [
 interface Props {
   plan: FullPlan;
   hypothesis: string;
+  executionReadiness?: ExecutionReadiness;
 }
 
-export function OverviewTab({ plan, hypothesis }: Props) {
+export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
   const ep = plan.experimentPlan;
+  const budget = ep.budget;
+  const contingencyPct = Number.isFinite(Number(budget?.contingencyPercent))
+    ? Number(budget?.contingencyPercent)
+    : 10;
+  const totalWithContingency = Number.isFinite(Number(budget?.totalWithContingencyUSD))
+    ? Number(budget?.totalWithContingencyUSD)
+    : Math.round(Number(ep.totalCostUSD || 0) * (1 + contingencyPct / 100));
   const hasVerificationSources =
     !!plan.verificationSources &&
     Object.values(plan.verificationSources).some((arr) => Array.isArray(arr) && arr.length > 0);
@@ -49,10 +57,12 @@ export function OverviewTab({ plan, hypothesis }: Props) {
         >
           <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300 light:text-cyan-800 mb-1.5 flex items-center gap-2">
             <Info className="h-3.5 w-3.5 shrink-0 text-cyan-400 light:text-cyan-700" />
-            Live web verification
+            Live web verification (Tavily)
           </p>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Use the &quot;Verify this section&quot; blocks in Protocol, Materials, Budget, Timeline, Validation, and Safety to open independent web sources before you order reagents or lock in spend.
+            Use the &quot;Verify this section&quot; blocks in Protocol, Materials, Budget, Timeline,
+            Validation, and Safety to open independent web sources before you order reagents or lock
+            in spend.
           </p>
         </div>
       )}
@@ -70,19 +80,50 @@ export function OverviewTab({ plan, hypothesis }: Props) {
           tone="cost"
           icon={<DollarSign className="h-5 w-5" />}
           label="Estimated total cost"
-          value={`$${ep.totalCostUSD.toLocaleString()}`}
-          sub={`Includes ${ep.budget.contingencyPercent}% contingency: $${ep.budget.totalWithContingencyUSD.toLocaleString()}`}
+          value={`$${Number(ep.totalCostUSD ?? 0).toLocaleString()}`}
+          sub={`Includes ${contingencyPct}% contingency: $${totalWithContingency.toLocaleString()}`}
           big
         />
         <StatCard
           tone="duration"
           icon={<Clock className="h-5 w-5" />}
           label="Estimated duration"
-          value={`${ep.totalDurationDays} days`}
-          sub={`${Math.ceil(ep.totalDurationDays / 7)} weeks of bench time`}
+          value={`${Number(ep.totalDurationDays ?? 0)} days`}
+          sub={`${Math.ceil(Number(ep.totalDurationDays ?? 0) / 7)} weeks of bench time`}
           big
         />
       </div>
+
+      {!!executionReadiness && (
+        <div
+          className={cn(
+            "rounded-xl border p-4 flex flex-wrap items-center gap-4",
+            executionReadiness.tier === "order_ready" &&
+              "border-emerald-500/35 bg-emerald-500/[0.06]",
+            executionReadiness.tier === "pilot_ready" && "border-amber-500/35 bg-amber-500/[0.06]",
+            executionReadiness.tier === "draft" && "border-border bg-card/30",
+          )}
+          data-print-card
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-primary/15 p-2.5 text-primary">
+              <ClipboardCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                Procurement readiness
+              </p>
+              <p className="text-xl font-semibold">
+                {executionReadiness.scoreOutOf10.toFixed(1)}
+                <span className="text-sm font-normal text-muted-foreground"> / 10</span>
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-foreground/85 flex-1 min-w-[200px] leading-relaxed">
+            {executionReadiness.headline}
+          </p>
+        </div>
+      )}
 
       <div className="grid sm:grid-cols-2 gap-4">
         <div
@@ -114,17 +155,22 @@ export function OverviewTab({ plan, hypothesis }: Props) {
             <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/40 light:text-emerald-900 light:border-emerald-600/35">
               {plan.hypothesisAnalysis.strengthScore}
             </Badge>
-            <span className="text-sm text-muted-foreground">{plan.hypothesisAnalysis.strengthReason}</span>
+            <span className="text-sm text-muted-foreground">
+              {plan.hypothesisAnalysis.strengthReason}
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex gap-3" data-print-card>
+      <div
+        className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex gap-3"
+        data-print-card
+      >
         <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
         <p className="text-sm text-amber-100/90 leading-relaxed">
-          <strong>Scientific honesty:</strong> All cost estimates reflect 2024-2025 supplier pricing —
-          verify current rates before procurement. Catalog numbers should be verified against current
-          supplier inventories. Timeline assumes standard institutional lab access.
+          <strong>Scientific honesty:</strong> All cost estimates reflect 2024-2025 supplier pricing
+          — verify current rates before procurement. Catalog numbers should be verified against
+          current supplier inventories. Timeline assumes standard institutional lab access.
         </p>
       </div>
     </div>

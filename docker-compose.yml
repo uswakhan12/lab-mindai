@@ -1,0 +1,18 @@
+# Optional: Postgres for multi-tenant feedback + scale story (hackathon / production-like).
+# Usage: docker compose up -d
+# Then set DATABASE_URL=postgres://labmind:labmind@localhost:5432/labmind in backend/.env
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: labmind
+      POSTGRES_PASSWORD: labmind
+      POSTGRES_DB: labmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - labmind_pgdata:/var/lib/postgresql/data
+
+volumes:
+  labmind_pgdata:

@@ -5,7 +5,13 @@ import type {
   ModelFlowMeta,
   S3StorePhase,
 } from "./generateTypes";
-import type { FullPlan } from "@/types/plan";
+import type {
+  ExecutionReadiness,
+  FullPlan,
+  QualityChecks,
+  ScientificMechanistic,
+} from "@/types/plan";
+import type { PlanFeedbackSummary } from "@/lib/fetchModelGeneratedPlan";
 
 function baseReset(sessionKey: string) {
   return {
@@ -30,6 +36,10 @@ function baseReset(sessionKey: string) {
     s3Error: "",
     s3GenInterrupted: false,
     s3GenRerun: 0,
+    s3FeedbackSummary: undefined as PlanFeedbackSummary | undefined,
+    s3QualityChecks: undefined as QualityChecks | undefined,
+    s3ScientificMechanistic: undefined as ScientificMechanistic | undefined,
+    s3ExecutionReadiness: undefined as ExecutionReadiness | undefined,
   };
 }
 
@@ -62,6 +72,10 @@ type GenerateState = ReturnType<typeof baseReset> & {
   setS3ModelFlow: (m: ModelFlowMeta | undefined) => void;
   setS3Error: (e: string) => void;
   setS3GenInterrupted: (v: boolean) => void;
+  setS3FeedbackSummary: (f: PlanFeedbackSummary | undefined) => void;
+  setS3QualityChecks: (q: QualityChecks | undefined) => void;
+  setS3ScientificMechanistic: (s: ScientificMechanistic | undefined) => void;
+  setS3ExecutionReadiness: (e: ExecutionReadiness | undefined) => void;
   bumpS3GenRerun: () => void;
 };
 
@@ -114,6 +128,10 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
   setS3ModelFlow: (m) => set({ s3ModelFlow: m }),
   setS3Error: (e) => set({ s3Error: e }),
   setS3GenInterrupted: (v) => set({ s3GenInterrupted: v }),
+  setS3FeedbackSummary: (f) => set({ s3FeedbackSummary: f }),
+  setS3QualityChecks: (q) => set({ s3QualityChecks: q }),
+  setS3ScientificMechanistic: (s) => set({ s3ScientificMechanistic: s }),
+  setS3ExecutionReadiness: (e) => set({ s3ExecutionReadiness: e }),
   bumpS3GenRerun: () =>
     set((s) => ({
       s3GenRerun: s.s3GenRerun + 1,
@@ -123,5 +141,9 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
       s3GenInterrupted: false,
       s3PipelinePhase: "idle",
       s3StepIdx: 0,
+      s3FeedbackSummary: undefined,
+      s3QualityChecks: undefined,
+      s3ScientificMechanistic: undefined,
+      s3ExecutionReadiness: undefined,
     })),
 }));

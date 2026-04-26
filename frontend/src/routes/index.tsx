@@ -40,14 +40,17 @@ function Index() {
             <span className="text-gradient">disciplines</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            From cryobiology to carbon capture — try a sample hypothesis above to see LabMind in action.
+            From cryobiology to carbon capture — try a sample hypothesis above to see LabMind in
+            action.
           </p>
         </section>
         <section
           id="about"
           className="container mx-auto px-6 py-16 max-w-3xl text-center app-section-surface-b rounded-2xl my-2 border border-border/30"
         >
-          <h2 className="text-3xl md:text-4xl font-semibold mb-4">Built by scientists, for scientists</h2>
+          <h2 className="text-3xl md:text-4xl font-semibold mb-4">
+            Built by scientists, for scientists
+          </h2>
           <p className="text-muted-foreground leading-relaxed">
             LabMind is an AI co-scientist trained on protocols, methods papers, and operational
             knowledge from working research labs. We don't replace judgement — we accelerate the

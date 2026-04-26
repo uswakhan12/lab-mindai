@@ -1,14 +1,11 @@
 import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { FullPlan } from "@/types/plan";
 import { generateMockPlan } from "@/lib/plan-generator";
 import { addToHistory } from "@/lib/storage";
 import { fetchPlanVerificationSources } from "@/lib/fetch-plan-sources";
 import { PlanView } from "@/components/plan/PlanView";
 import { useGenerateStore } from "@/lib/generateStore";
 import { PLAN_LOADING_STEPS } from "@/lib/planLoadingSteps";
-
-export type PlanPipelinePhase = "idle" | "loading" | "ready" | "error";
 
 export function Stage3Plan({
   hypothesis,
@@ -21,13 +18,23 @@ export function Stage3Plan({
   const s3StepIdx = useGenerateStore((s) => s.s3StepIdx);
   const plan = useGenerateStore((s) => s.s3Plan);
   const modelFlow = useGenerateStore((s) => s.s3ModelFlow);
+  const feedbackSummary = useGenerateStore((s) => s.s3FeedbackSummary);
+  const qualityChecks = useGenerateStore((s) => s.s3QualityChecks);
+  const scientificMechanistic = useGenerateStore((s) => s.s3ScientificMechanistic);
+  const executionReadiness = useGenerateStore((s) => s.s3ExecutionReadiness);
   const error = useGenerateStore((s) => s.s3Error);
+  const s3PipelinePhase = useGenerateStore((s) => s.s3PipelinePhase);
   const genInterrupted = useGenerateStore((s) => s.s3GenInterrupted);
+
   const applyMockAndSources = async () => {
     const p = generateMockPlan(hypothesis);
     addToHistory(hypothesis, p);
     const st = useGenerateStore.getState();
     st.setS3ModelFlow({ retrievalModel: "mock", planningModel: "mock-fallback" });
+    st.setS3FeedbackSummary(undefined);
+    st.setS3QualityChecks(undefined);
+    st.setS3ScientificMechanistic(undefined);
+    st.setS3ExecutionReadiness(undefined);
     try {
       const verificationSources = await fetchPlanVerificationSources(hypothesis, p);
       st.setS3Plan(verificationSources ? { ...p, verificationSources } : p);
@@ -48,7 +55,15 @@ export function Stage3Plan({
             You are editing the hypothesis. <strong>Save</strong> to run the pipeline with the new
             text. <strong>Cancel</strong> to keep this plan and close the editor.
           </div>
-          <PlanView plan={plan} hypothesis={hypothesis} modelFlow={modelFlow} />
+          <PlanView
+            plan={plan}
+            hypothesis={hypothesis}
+            modelFlow={modelFlow}
+            feedbackSummary={feedbackSummary}
+            qualityChecks={qualityChecks}
+            scientificMechanistic={scientificMechanistic}
+            executionReadiness={executionReadiness}
+          />
         </div>
       );
     }
@@ -68,7 +83,17 @@ export function Stage3Plan({
   }
 
   if (plan) {
-    return <PlanView plan={plan} hypothesis={hypothesis} modelFlow={modelFlow} />;
+    return (
+      <PlanView
+        plan={plan}
+        hypothesis={hypothesis}
+        modelFlow={modelFlow}
+        feedbackSummary={feedbackSummary}
+        qualityChecks={qualityChecks}
+        scientificMechanistic={scientificMechanistic}
+        executionReadiness={executionReadiness}
+      />
+    );
   }
 
   if (!suspended && genInterrupted && !error) {
@@ -91,7 +116,7 @@ export function Stage3Plan({
     );
   }
 
-  if (error) {
+  if (s3PipelinePhase === "error" && error) {
     return (
       <div
         className="rounded-2xl border border-destructive/40 bg-card/60 backdrop-blur p-8 animate-fade-in"

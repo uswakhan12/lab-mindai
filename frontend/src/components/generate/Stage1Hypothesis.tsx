@@ -91,7 +91,12 @@ export function Stage1Hypothesis({ onComplete, suspended = false }: Props) {
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={onComplete} size="lg" className="btn-cta h-12 px-6 rounded-xl group">
+        <Button
+          onClick={onComplete}
+          size="lg"
+          className="btn-cta h-12 px-6 rounded-xl group"
+          data-testid="stage1-run-lit-qc"
+        >
           Run Literature QC
           <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
         </Button>

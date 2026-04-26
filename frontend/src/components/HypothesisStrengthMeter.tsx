@@ -2,10 +2,16 @@ import { Check, X } from "lucide-react";
 import { type QualityCheck } from "@/lib/plan-generator";
 import { cn } from "@/lib/utils";
 
-export function HypothesisStrengthMeter({ quality, className }: { quality: QualityCheck; className?: string }) {
-  const { score, hasIntervention, hasMeasurableOutcome, hasMechanism, hasControl, wordCount } = quality;
-  const tone =
-    score >= 75 ? "emerald" : score >= 50 ? "amber" : "rose";
+export function HypothesisStrengthMeter({
+  quality,
+  className,
+}: {
+  quality: QualityCheck;
+  className?: string;
+}) {
+  const { score, hasIntervention, hasMeasurableOutcome, hasMechanism, hasControl, wordCount } =
+    quality;
+  const tone = score >= 75 ? "emerald" : score >= 50 ? "amber" : "rose";
 
   const barColor = {
     emerald: "bg-emerald-500",

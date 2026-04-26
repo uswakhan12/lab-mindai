@@ -9,3 +9,10 @@
 # Dependency directories
 node_modules/
 **/node_modules/
+backend/node_modules/
+frontend/node_modules/
+backend/.env.example
+
+# Local SQLite DB and Playwright artifacts
+backend/data/*.sqlite
+frontend/test-results/
