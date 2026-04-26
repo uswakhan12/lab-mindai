@@ -1099,6 +1099,16 @@ function evaluatePlanQuality({ hypothesis, plan }) {
   };
 }
 
+app.get("/", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "labmind-api",
+    health: "/health",
+    hint:
+      "This origin is the JSON API only (no web UI at /). Open your Cloudflare Workers URL for the LabMind app; the browser calls /api/* here.",
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true, rateLimit: { windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX } });
 });

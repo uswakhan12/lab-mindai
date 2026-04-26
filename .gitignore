@@ -16,3 +16,4 @@ backend/.env.example
 # Local SQLite DB and Playwright artifacts
 backend/data/*.sqlite
 frontend/test-results/
+DEPLOY.md
