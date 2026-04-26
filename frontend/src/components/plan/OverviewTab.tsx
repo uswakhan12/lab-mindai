@@ -16,6 +16,10 @@ interface Props {
 
 export function OverviewTab({ plan, hypothesis }: Props) {
   const ep = plan.experimentPlan;
+  const hasVerificationSources =
+    !!plan.verificationSources &&
+    Object.values(plan.verificationSources).some((arr) => Array.isArray(arr) && arr.length > 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -29,6 +33,18 @@ export function OverviewTab({ plan, hypothesis }: Props) {
           {ep.difficultyLevel}
         </Badge>
       </div>
+
+      {hasVerificationSources && (
+        <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm" data-print-card>
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1.5 flex items-center gap-2">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            Live verification (Tavily)
+          </p>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Use the &quot;Verify this section&quot; blocks in Protocol, Materials, Budget, Timeline, Validation, and Safety to open independent web sources before you order reagents or lock in spend.
+          </p>
+        </div>
+      )}
 
       <div className="rounded-xl border border-border bg-card/40 backdrop-blur p-5" data-print-card>
         <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Hypothesis</p>

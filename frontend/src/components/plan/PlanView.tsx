@@ -12,6 +12,10 @@ import { encodeHypothesis, getReviewsForDomain } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 type TabId = "overview" | "protocol" | "materials" | "budget" | "timeline" | "validation" | "safety";
+interface ModelFlow {
+  retrievalModel?: string;
+  planningModel?: string;
+}
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "overview", label: "Overview", icon: Sparkles },
@@ -23,7 +27,15 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: "safety", label: "Safety", icon: ShieldAlert },
 ];
 
-export function PlanView({ plan, hypothesis }: { plan: FullPlan; hypothesis: string }) {
+export function PlanView({
+  plan,
+  hypothesis,
+  modelFlow,
+}: {
+  plan: FullPlan;
+  hypothesis: string;
+  modelFlow?: ModelFlow;
+}) {
   const [tab, setTab] = useState<TabId>("overview");
   const priorReviews = getReviewsForDomain(plan.domain);
 
@@ -38,8 +50,8 @@ export function PlanView({ plan, hypothesis }: { plan: FullPlan; hypothesis: str
   };
 
   const downloadPDF = () => {
-    toast.message("Opening print dialog — choose 'Save as PDF'");
-    setTimeout(() => window.print(), 200);
+    toast.dismiss();
+    requestAnimationFrame(() => window.print());
   };
 
   return (
@@ -49,6 +61,18 @@ export function PlanView({ plan, hypothesis }: { plan: FullPlan; hypothesis: str
         <div>
           <p className="text-xs uppercase tracking-widest text-primary mb-1">Stage 3 · Complete</p>
           <h2 className="text-xl font-semibold">Your experiment plan is ready</h2>
+          {modelFlow?.planningModel && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Generated with{" "}
+              <span className="font-mono text-foreground">{modelFlow.planningModel}</span>
+              {modelFlow.retrievalModel ? (
+                <>
+                  {" "}· retrieval{" "}
+                  <span className="font-mono text-foreground">{modelFlow.retrievalModel}</span>
+                </>
+              ) : null}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={copyLink}><Link2 className="h-4 w-4 mr-2" />Copy Link</Button>
@@ -73,26 +97,37 @@ export function PlanView({ plan, hypothesis }: { plan: FullPlan; hypothesis: str
       </div>
 
       {/* Desktop layout */}
-      <div className="grid md:grid-cols-[200px,1fr] gap-6">
-        {/* Sidebar nav */}
-        <nav className="hidden md:block space-y-1 sticky top-20 self-start" data-print-hide>
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            const active = t.id === tab;
-            return (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all text-left",
-                  active ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground hover:bg-card/50",
-                )}>
-                <Icon className="h-4 w-4" />{t.label}
-              </button>
-            );
-          })}
-        </nav>
+      <div className="grid md:grid-cols-[200px,1fr] gap-6 md:items-start">
+        {/* Sidebar nav — opaque surface so scrolling main column never paints over labels */}
+        <div className="hidden md:block relative z-20 self-start" data-print-hide>
+          <nav className="space-y-1 sticky top-20 rounded-xl border border-border/80 bg-card/95 backdrop-blur-md p-2 shadow-sm">
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              const active = t.id === tab;
+              return (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all text-left",
+                    active ? "bg-primary/15 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground hover:bg-card/50",
+                  )}>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
 
         {/* Tab content (screen) */}
-        <div className="min-w-0" data-print-hide>
+        <div className="min-w-0 relative z-0" data-print-hide>
+          <div
+            className="hidden md:block sticky top-20 z-[5] mb-4 rounded-lg border border-border/80 bg-background/95 px-4 py-2.5 backdrop-blur-md supports-[backdrop-filter]:bg-background/90"
+            aria-live="polite"
+          >
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+              {TABS.find((t) => t.id === tab)?.label}
+            </p>
+          </div>
           {tab === "overview" && <OverviewTab plan={plan} hypothesis={hypothesis} />}
           {tab === "protocol" && <ProtocolTab plan={plan} />}
           {tab === "materials" && <MaterialsTab plan={plan} />}

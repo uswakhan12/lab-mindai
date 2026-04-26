@@ -16,61 +16,74 @@ interface Reference {
   year: number;
   doi: string;
   relevance: string;
+  url?: string;
+  validationStatus?: "validated" | "weak_match";
+  confidence?: number;
 }
 
-const MOCK_REFERENCES: Reference[] = [
-  {
-    title:
-      "Trehalose enhances osmotic stability and post-thaw recovery of mammalian cells without intracellular delivery",
-    authors: "Eroglu A, Russo MJ, Bieganski R, et al.",
-    journal: "Nature Biotechnology",
-    year: 2000,
-    doi: "10.1038/72608",
-    relevance:
-      "Foundational study showing extracellular trehalose alone yields modest viability gains — supports your direct comparison.",
-  },
-  {
-    title:
-      "Comparative cryoprotective efficacy of disaccharides versus DMSO in human cell line preservation",
-    authors: "Stewart S, He X.",
-    journal: "Cryobiology",
-    year: 2019,
-    doi: "10.1016/j.cryobiol.2019.04.003",
-    relevance:
-      "Closest prior work — tested sucrose & trehalose vs DMSO in HepG2, not HeLa. Your specific cell line × ≥15pp endpoint is unaddressed.",
-  },
-  {
-    title:
-      "Intracellular trehalose loading via genetically engineered transporters improves cryosurvival",
-    authors: "Chen T, Acker JP, Eroglu A, et al.",
-    journal: "Cell Preservation Technology",
-    year: 2021,
-    doi: "10.1089/cpt.2021.0014",
-    relevance:
-      "Adjacent approach (engineered uptake). Differentiates your protocol — you propose a simple substitution, not a transporter system.",
-  },
-];
+interface QCResponse {
+  noveltySignal: "not_found" | "similar_exists" | "exact_match";
+  noveltyExplanation: string;
+  references: Reference[];
+  modelFlow?: { retrieval?: string; validator?: string };
+}
 
-export function Stage2Literature({ onComplete }: Props) {
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+
+function noveltyBadge(signal: QCResponse["noveltySignal"]) {
+  if (signal === "exact_match") return "🔴 Exact Match Found";
+  if (signal === "similar_exists") return "🟡 Similar Work Exists";
+  return "🟢 Not Found";
+}
+
+export function Stage2Literature({ hypothesis, onComplete }: Props) {
   const [progress, setProgress] = useState(0);
-  const [done, setDone] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<QCResponse | null>(null);
 
   useEffect(() => {
+    setLoading(true);
+    setError("");
+    setResult(null);
+    setProgress(0);
+
     const start = Date.now();
-    const duration = 3000;
+    const duration = 5000;
     const interval = setInterval(() => {
       const elapsed = Date.now() - start;
-      const pct = Math.min(100, (elapsed / duration) * 100);
+      const pct = Math.min(92, (elapsed / duration) * 100);
       setProgress(pct);
-      if (pct >= 100) {
-        clearInterval(interval);
-        setTimeout(() => setDone(true), 200);
-      }
     }, 50);
-    return () => clearInterval(interval);
-  }, []);
 
-  if (!done) {
+    const fetchQC = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/literature-qc`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hypothesis }),
+        });
+        const data = (await response.json()) as QCResponse & { error?: string; details?: string };
+        if (!response.ok) {
+          const parts = [data.error, data.details].filter(Boolean);
+          throw new Error(parts.join(" — ") || "Failed to fetch literature QC.");
+        }
+        setResult(data);
+        setProgress(100);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unexpected error";
+        setError(message);
+      } finally {
+        clearInterval(interval);
+        setLoading(false);
+      }
+    };
+
+    fetchQC();
+    return () => clearInterval(interval);
+  }, [hypothesis]);
+
+  if (loading) {
     return (
       <div className="rounded-2xl border border-border bg-card/50 backdrop-blur p-10 animate-fade-in">
         <div className="flex items-start gap-4 mb-6">
@@ -78,20 +91,37 @@ export function Stage2Literature({ onComplete }: Props) {
             <Library className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <p className="font-medium">Searching 200M+ papers across PubMed, arXiv, Semantic Scholar…</p>
+            <p className="font-medium">Searching literature using backend Tavily service...</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Embedding hypothesis · matching abstracts · ranking by methodological proximity
+              Matching protocols · ranking relevance · preparing novelty signal
             </p>
           </div>
         </div>
         <Progress value={progress} className="h-1.5" />
         <div className="flex justify-between mt-3 text-xs text-muted-foreground font-mono">
           <span>{Math.round(progress)}%</span>
-          <span>{Math.round((progress / 100) * 207_412_883).toLocaleString()} / 207,412,883 indexed</span>
+          <span>{Math.round((progress / 100) * 5)} / 5 results scanned</span>
         </div>
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-destructive/40 bg-card/60 backdrop-blur p-6 animate-fade-in">
+        <h3 className="font-semibold text-lg mb-2">Literature QC failed</h3>
+        <p className="text-sm text-muted-foreground mb-4">{error}</p>
+        <div className="flex justify-end">
+          <Button onClick={onComplete} size="lg" className="h-12 px-6 rounded-xl group">
+            Continue to Experiment Plan
+            <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!result) return null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -103,27 +133,25 @@ export function Stage2Literature({ onComplete }: Props) {
             </div>
             <h3 className="font-semibold text-lg">Novelty Assessment</h3>
           </div>
-          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/20">
-            🟡 Similar Work Exists
-          </Badge>
+          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/20">{noveltyBadge(result.noveltySignal)}</Badge>
         </div>
-        <p className="text-foreground/90 leading-relaxed">
-          Three closely related studies were identified, but none test your <em>exact</em> combination of
-          cell line (HeLa), cryoprotectant (trehalose substitution), and quantitative endpoint
-          (≥15 percentage point viability improvement vs. 10% DMSO). Your hypothesis is{" "}
-          <strong className="text-foreground">methodologically novel</strong> within an active research area —
-          ideal positioning for a reproducible, publishable result.
-        </p>
+        <p className="text-foreground/90 leading-relaxed">{result.noveltyExplanation}</p>
+        {result.modelFlow?.validator && (
+          <p className="text-xs text-muted-foreground mt-2">
+            Retrieval: <span className="font-mono text-foreground">{result.modelFlow.retrieval || "tavily"}</span>
+            {" "}· Validation: <span className="font-mono text-foreground">{result.modelFlow.validator}</span>
+          </p>
+        )}
       </div>
 
       <div className="space-y-3">
         <p className="text-xs uppercase tracking-widest text-muted-foreground px-1">
           Top relevant prior work
         </p>
-        {MOCK_REFERENCES.map((ref, i) => (
+        {result.references.map((ref, i) => (
           <a
-            key={ref.doi}
-            href={`https://doi.org/${ref.doi}`}
+            key={`${ref.title}-${i}`}
+            href={ref.url || "#"}
             target="_blank"
             rel="noopener noreferrer"
             className="block rounded-xl border border-border bg-card/50 hover:bg-card hover:border-primary/40 transition-all p-5 group animate-fade-in"
@@ -137,13 +165,28 @@ export function Stage2Literature({ onComplete }: Props) {
             </div>
             <p className="text-sm text-muted-foreground mb-1">{ref.authors}</p>
             <p className="text-xs text-muted-foreground font-mono mb-3">
-              {ref.journal} · {ref.year} · doi:{ref.doi}
+              {ref.journal} · {ref.year} · {ref.doi === "N/A" ? "source link" : `doi:${ref.doi}`}
             </p>
+            {(ref.validationStatus || typeof ref.confidence === "number") && (
+              <p className="text-xs mb-2">
+                <span className={ref.validationStatus === "validated" ? "text-emerald-400" : "text-amber-400"}>
+                  {ref.validationStatus === "validated" ? "Validated by Llama 8B" : "Weak match (Llama 8B)"}
+                </span>
+                {typeof ref.confidence === "number" ? (
+                  <span className="text-muted-foreground"> · confidence {(ref.confidence * 100).toFixed(0)}%</span>
+                ) : null}
+              </p>
+            )}
             <p className="text-sm text-foreground/80 border-l-2 border-primary/40 pl-3 leading-relaxed">
               {ref.relevance}
             </p>
           </a>
         ))}
+        {result.references.length === 0 && (
+          <div className="rounded-xl border border-border bg-card/50 p-5 text-sm text-muted-foreground">
+            No relevant references were found for this hypothesis.
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end">

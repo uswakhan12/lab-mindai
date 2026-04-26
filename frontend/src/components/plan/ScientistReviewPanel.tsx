@@ -3,7 +3,7 @@ import type { FullPlan } from "@/types/plan";
 import { type Review, type ReviewSection, saveReview, cryptoRandomId } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Star, MessageSquare, Check } from "lucide-react";
+import { Star, MessageSquare, Check, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -56,9 +56,22 @@ export function ScientistReviewPanel({ plan, hypothesis }: { plan: FullPlan; hyp
 
   return (
     <div className="rounded-xl border border-border bg-card/50 backdrop-blur p-6 space-y-5" data-print-hide>
-      <div>
-        <h3 className="font-semibold text-lg">Scientist Review</h3>
-        <p className="text-sm text-muted-foreground">Your corrections train future plans in this domain.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-lg">Scientist Review</h3>
+          <p className="text-sm text-muted-foreground">Your corrections train future plans in this domain.</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-1.5"
+          onClick={() => setOpen(false)}
+          aria-label="Minimize review form"
+        >
+          <ChevronDown className="h-4 w-4" />
+          Minimize
+        </Button>
       </div>
       {SECTIONS.map((s) => (
         <div key={s} className="rounded-lg border border-border bg-card/40 p-4 space-y-3">

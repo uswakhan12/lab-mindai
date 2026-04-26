@@ -95,6 +95,80 @@
   --grid-color: oklch(0.3 0.04 265 / 0.4);
 }
 
+.light {
+  --background: oklch(0.985 0.004 250);
+  --foreground: oklch(0.22 0.03 260);
+
+  --card: oklch(0.995 0.002 250);
+  --card-foreground: oklch(0.22 0.03 260);
+
+  --popover: oklch(0.995 0.002 250);
+  --popover-foreground: oklch(0.22 0.03 260);
+
+  --primary: oklch(0.58 0.19 255);
+  --primary-foreground: oklch(0.985 0.004 250);
+  --primary-glow: oklch(0.67 0.15 250);
+
+  --secondary: oklch(0.94 0.01 250);
+  --secondary-foreground: oklch(0.24 0.03 260);
+
+  --muted: oklch(0.95 0.01 250);
+  --muted-foreground: oklch(0.5 0.03 255);
+
+  --accent: oklch(0.92 0.03 255);
+  --accent-foreground: oklch(0.24 0.03 260);
+
+  --destructive: oklch(0.6 0.2 27);
+  --destructive-foreground: oklch(0.98 0.005 250);
+
+  --border: oklch(0.86 0.015 250);
+  --input: oklch(0.98 0.004 250);
+  --ring: oklch(0.58 0.19 255);
+
+  --gradient-hero: radial-gradient(ellipse at top, oklch(0.72 0.1 255 / 0.2), transparent 60%);
+  --gradient-primary: linear-gradient(135deg, oklch(0.58 0.19 255), oklch(0.66 0.15 245));
+  --gradient-text: linear-gradient(135deg, oklch(0.28 0.04 260), oklch(0.52 0.13 255));
+  --shadow-glow: 0 0 30px oklch(0.58 0.19 255 / 0.2);
+  --shadow-elegant: 0 20px 50px -25px oklch(0.35 0.05 250 / 0.22);
+  --grid-color: oklch(0.82 0.01 250 / 0.7);
+}
+
+/* Light-mode readability overrides for warm/success accents */
+.light .text-amber-300 { color: #92400e !important; }
+.light .text-amber-400 { color: #b45309 !important; }
+.light .text-amber-200 { color: #92400e !important; }
+.light .text-amber-100\/90 { color: #78350f !important; }
+.light .bg-amber-500\/5 { background-color: rgba(245, 158, 11, 0.12) !important; }
+.light .bg-amber-500\/15 { background-color: rgba(245, 158, 11, 0.18) !important; }
+.light .border-amber-500\/30 { border-color: rgba(180, 83, 9, 0.45) !important; }
+
+.light .text-emerald-300 { color: #065f46 !important; }
+.light .text-emerald-400 { color: #047857 !important; }
+.light .bg-emerald-500\/5 { background-color: rgba(16, 185, 129, 0.12) !important; }
+.light .bg-emerald-500\/15 { background-color: rgba(16, 185, 129, 0.18) !important; }
+.light .border-emerald-500\/30,
+.light .border-emerald-500\/60 { border-color: rgba(4, 120, 87, 0.45) !important; }
+
+.light .text-rose-200 { color: #9f1239 !important; }
+.light .text-rose-300 { color: #9f1239 !important; }
+.light .text-rose-400 { color: #be123c !important; }
+.light .bg-rose-500\/5 { background-color: rgba(244, 63, 94, 0.1) !important; }
+.light .bg-rose-500\/10 { background-color: rgba(244, 63, 94, 0.14) !important; }
+.light .bg-rose-500\/15 { background-color: rgba(244, 63, 94, 0.18) !important; }
+.light .border-rose-500\/30,
+.light .border-rose-500\/40 { border-color: rgba(190, 24, 93, 0.38) !important; }
+
+/* Opacity-based foreground utilities can become too faint in light mode. */
+.light .text-foreground\/95,
+.light .text-foreground\/90,
+.light .text-foreground\/85,
+.light .text-foreground\/80 {
+  color: #1f2937 !important;
+}
+.light .text-muted-foreground {
+  color: #4b5563 !important;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

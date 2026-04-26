@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import type { FullPlan } from "@/types/plan";
+import { VerificationSourcesBlock } from "./VerificationSourcesBlock";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ export function BudgetTab({ plan }: { plan: FullPlan }) {
 
   return (
     <div className="space-y-6">
+      <VerificationSourcesBlock plan={plan} section="budget" />
       <div className="flex items-center justify-between flex-wrap gap-3" data-print-hide>
         <p className="text-sm text-muted-foreground">All amounts include {ep.budget.contingencyPercent}% contingency buffer.</p>
         <div className="flex gap-1 rounded-lg border border-border bg-card/50 p-1">
@@ -82,6 +84,7 @@ export function TimelineTab({ plan }: { plan: FullPlan }) {
   };
   return (
     <div className="space-y-5">
+      <VerificationSourcesBlock plan={plan} section="timeline" />
       <p className="text-sm text-muted-foreground">Total duration: <span className="text-foreground font-medium">{total} days (~{Math.ceil(total / 7)} weeks)</span></p>
       <div className="rounded-xl border border-border bg-card/40 p-5 space-y-3" data-print-card>
         {phases.map((p) => {
@@ -117,6 +120,7 @@ export function ValidationTab({ plan }: { plan: FullPlan }) {
   const v = plan.experimentPlan.validation;
   return (
     <div className="space-y-5">
+      <VerificationSourcesBlock plan={plan} section="validation" />
       <Section icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />} title="Primary success metrics">
         <ul className="space-y-2">{v.successMetrics.map((m, i) => <li key={i} className="text-sm flex gap-2"><span className="text-emerald-400">✓</span>{m}</li>)}</ul>
       </Section>
@@ -149,6 +153,7 @@ export function SafetyTab({ plan }: { plan: FullPlan }) {
   const s = plan.experimentPlan.safety;
   return (
     <div className="space-y-5">
+      <VerificationSourcesBlock plan={plan} section="safety" />
       <Section icon={<ShieldAlert className="h-4 w-4 text-rose-400" />} title="Hazardous materials">
         <div className="space-y-3">{s.hazardousMaterials.map((m, i) => (
           <div key={i} className="rounded-md border border-rose-500/30 bg-rose-500/5 p-3" data-print-card>

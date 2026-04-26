@@ -22,6 +22,25 @@ export interface Reference {
   relevance: string;
 }
 
+/** Live web hit used to cross-check plan assumptions (from Tavily). */
+export interface VerificationSource {
+  title: string;
+  url: string;
+  snippet: string;
+  validationStatus?: "validated" | "weak_match";
+  confidence?: number;
+}
+
+export type PlanVerificationSection =
+  | "protocol"
+  | "materials"
+  | "budget"
+  | "timeline"
+  | "validation"
+  | "safety";
+
+export type PlanVerificationSources = Partial<Record<PlanVerificationSection, VerificationSource[]>>;
+
 export interface LiteratureQC {
   noveltySignal: NoveltySignal;
   noveltyExplanation: string;
@@ -104,6 +123,8 @@ export interface FullPlan {
   experimentPlan: ExperimentPlan;
   /** Domain tag for matching feedback (e.g. "cell_biology") */
   domain: string;
+  /** Optional Tavily-backed links per section for verification before ordering / execution */
+  verificationSources?: PlanVerificationSources;
   /** AI reasoning trace for transparency */
   reasoning: {
     repositoriesConsulted: string[];

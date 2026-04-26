@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { FullPlan, Material, MaterialCategory } from "@/types/plan";
+import { VerificationSourcesBlock } from "./VerificationSourcesBlock";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUpDown, Download, AlertTriangle } from "lucide-react";
@@ -52,6 +53,7 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
 
   return (
     <div className="space-y-5">
+      <VerificationSourcesBlock plan={plan} section="materials" />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-sm text-muted-foreground">{materials.length} line items across reagents, equipment, and consumables.</p>

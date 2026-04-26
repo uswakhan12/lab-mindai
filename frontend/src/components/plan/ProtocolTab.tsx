@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FullPlan } from "@/types/plan";
 import { AlertTriangle, Info, Clock, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VerificationSourcesBlock } from "./VerificationSourcesBlock";
 
 export function ProtocolTab({ plan }: { plan: FullPlan }) {
   const [checked, setChecked] = useState<Set<number>>(new Set());
@@ -19,6 +20,7 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
 
   return (
     <div className="space-y-8">
+      <VerificationSourcesBlock plan={plan} section="protocol" />
       <div className="rounded-xl border border-border bg-card/40 p-4 flex items-center justify-between flex-wrap gap-3" data-print-hide>
         <p className="text-sm text-muted-foreground">
           {completedCount} of {allSteps.length} steps complete

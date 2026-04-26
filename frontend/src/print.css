@@ -24,6 +24,13 @@
     display: none !important;
   }
 
+  /* Sonner toasts (incl. “Save as PDF” hint) must never appear in exported PDF */
+  [data-sonner-toaster],
+  [data-sonner-toast],
+  ol[data-sonner-toaster] {
+    display: none !important;
+  }
+
   /* Reveal print-only blocks */
   [data-print-only] {
     display: block !important;
