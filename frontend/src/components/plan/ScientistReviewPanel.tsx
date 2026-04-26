@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FullPlan } from "@/types/plan";
-import { type Review, type ReviewSection, saveReview, cryptoRandomId } from "@/lib/storage";
+import { type Review, type ReviewSection, saveReview, saveReviewToBackend, cryptoRandomId } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Star, MessageSquare, Check, ChevronDown } from "lucide-react";
@@ -20,7 +20,7 @@ export function ScientistReviewPanel({ plan, hypothesis }: { plan: FullPlan; hyp
   const [overall, setOverall] = useState(0);
   const [expertise, setExpertise] = useState("");
 
-  const submit = () => {
+  const submit = async () => {
     const r: Review = {
       id: cryptoRandomId(),
       timestamp: new Date().toISOString(),
@@ -33,8 +33,14 @@ export function ScientistReviewPanel({ plan, hypothesis }: { plan: FullPlan; hyp
       originalPlanSummary: plan.experimentPlan.title,
     };
     saveReview(r);
-    setSubmitted(true);
-    toast.success("Review saved — future plans in this domain will use your feedback");
+    try {
+      await saveReviewToBackend(r);
+      setSubmitted(true);
+      toast.success("Review saved to shared store — future plans will use this feedback.");
+    } catch {
+      setSubmitted(true);
+      toast.success("Review saved locally. Backend save failed, but your current device still learned.");
+    }
   };
 
   if (submitted) {
@@ -90,7 +96,7 @@ export function ScientistReviewPanel({ plan, hypothesis }: { plan: FullPlan; hyp
           {EXPERTISE.map((e) => <option key={e} value={e}>{e}</option>)}
         </select>
       </div>
-      <Button onClick={submit} className="w-full bg-primary-gradient" disabled={overall === 0}>Submit Review</Button>
+      <Button onClick={() => void submit()} className="w-full bg-primary-gradient" disabled={overall === 0}>Submit Review</Button>
     </div>
   );
 }

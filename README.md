@@ -9,8 +9,10 @@ LabMind AI is a scientific experiment planning web app that turns a research hyp
 Current implementation is full-stack:
 
 - **Stage 2 (Literature QC):** Tavily retrieval + Llama 8B validation
-- **Stage 3 (Experiment Plan):** Llama 70B planning with Gemini fallback
+- **Stage 3 (Experiment Plan):** Retrieval-grounded Llama 70B planning with Gemini fallback
 - **Stage 3 citations:** Tavily source retrieval + Llama 8B source relevance checks
+- **Quality gates:** automated plan checks + section evidence coverage scoring
+- **Feedback learning store:** SQLite-backed shared review memory (`backend/data/labmind.sqlite`)
 
 ## Tech Stack
 
@@ -86,9 +88,12 @@ npm run dev
   - `npm run dev` - Start local development server
   - `npm run build` - Build production bundle
   - `npm run lint` - Run ESLint checks
+  - `npm run test:e2e` - Run Playwright E2E smoke tests
 - Backend (`backend/`)
   - `npm run dev` - Start backend with watch mode
   - `npm run start` - Start backend without watch
+  - `npm run test` - Run backend API smoke tests
+  - `npm run benchmark` - Run 4-scenario judge benchmark against local backend
 
 ## Backend API
 
@@ -99,10 +104,10 @@ npm run dev
 - `POST /api/plan-sources`
   - Tavily retrieval of citation links per section (`protocol`, `materials`, `budget`, `timeline`, `validation`, `safety`)
 - `POST /api/experiment-plan`
-  - Generates full experiment plan using Llama 70B
+  - Generates full experiment plan using Llama 70B, grounded by retrieval packet
   - Falls back to Gemini if Llama 70B fails or quota is exhausted
   - Then attaches Tavily citations and validates those citations with Llama 8B
-  - Returns `modelFlow` showing planning model and source-check model used
+  - Returns `modelFlow`, `feedbackSummary`, and `qualityChecks` (judge-style score, gates, evidence coverage)
 
 ## Project Structure
 
@@ -127,9 +132,33 @@ npm run dev
 
 ## Notes
 
-- Data is stored in browser `localStorage` only (history/reviews).
+- History remains in browser `localStorage`, but scientist reviews are also persisted in backend SQLite for cross-user reuse.
 - If model calls fail, Stage 3 now shows a visible error and allows optional manual mock fallback.
 - Stage 2 and Stage 3 source checks include model validation status and confidence.
+- Backend includes basic observability (request ID + latency logs) and per-IP rate limiting.
+- Quality checks include deeper scientific heuristics (unit/concentration detection, statistical plan signal checks, numeric sample size checks, and safety completeness checks).
+
+## Judge Rubric (Built-In)
+
+`/api/experiment-plan` now computes objective quality checks:
+
+- **Completeness:** protocol depth, materials richness, validation fields, budget/timeline presence
+- **Evidence grounding:** per-section verification coverage from retrieval + source validation
+- **Operational realism:** timeline consistency, budget coherence, and execution readiness indicators
+
+The API returns:
+
+- `qualityChecks.scoreOutOf10`
+- `qualityChecks.gatesPassed`
+- `qualityChecks.dimensions` (completeness / evidenceGrounding / operationalRealism)
+- `qualityChecks.warnings` and `qualityChecks.errors`
+
+Benchmark locally:
+
+```bash
+cd backend
+npm run benchmark
+```
 
 ## Troubleshooting
 

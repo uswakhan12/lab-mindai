@@ -2,6 +2,7 @@
 // All functions are SSR-safe (return defaults when window is undefined).
 
 import type { FullPlan } from "@/types/plan";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
 
 const HISTORY_KEY = "labmind:history:v1";
 const REVIEWS_KEY = "labmind:reviews:v1";
@@ -98,8 +99,28 @@ export function saveReview(review: Review): void {
   }
 }
 
+export async function saveReviewToBackend(review: Review): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/api/reviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(review),
+  });
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || "Failed to save review to backend.");
+  }
+}
+
 export function getReviewsForDomain(domain: string): Review[] {
   return getReviews().filter((r) => r.domain === domain);
+}
+
+export async function fetchReviewsForDomain(domain: string, limit = 20): Promise<Review[]> {
+  const params = new URLSearchParams({ domain, limit: String(limit) });
+  const res = await fetch(`${BACKEND_URL}/api/reviews?${params.toString()}`);
+  if (!res.ok) return [];
+  const payload = (await res.json().catch(() => ({}))) as { reviews?: Review[] };
+  return Array.isArray(payload.reviews) ? payload.reviews : [];
 }
 
 export function clearReviews(): void {

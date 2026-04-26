@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { FullPlan } from "@/types/plan";
+import type { FullPlan, QualityChecks } from "@/types/plan";
 import { detectDomain, generateMockPlan } from "@/lib/plan-generator";
-import { addToHistory, getReviewsForDomain } from "@/lib/storage";
+import { addToHistory, fetchReviewsForDomain, getReviewsForDomain } from "@/lib/storage";
 import { fetchPlanVerificationSources } from "@/lib/fetch-plan-sources";
 import { PlanView } from "@/components/plan/PlanView";
 
@@ -30,9 +30,15 @@ interface FeedbackSummary {
 
 async function fetchModelGeneratedPlan(
   hypothesis: string,
-): Promise<{ plan: FullPlan; modelFlow?: ModelFlow; feedbackSummary?: FeedbackSummary }> {
+): Promise<{ plan: FullPlan; modelFlow?: ModelFlow; feedbackSummary?: FeedbackSummary; qualityChecks?: QualityChecks }> {
   const { domain } = detectDomain(hypothesis);
-  const priorFeedback = getReviewsForDomain(domain).slice(-5).map((r) => ({
+  const localFeedback = getReviewsForDomain(domain).slice(-5);
+  const remoteFeedback = await fetchReviewsForDomain(domain, 8);
+  const deduped = [...localFeedback, ...remoteFeedback].filter((r, idx, arr) => {
+    const signature = `${r.timestamp}-${r.originalPlanSummary}-${r.reviewerExpertise}`;
+    return arr.findIndex((x) => `${x.timestamp}-${x.originalPlanSummary}-${x.reviewerExpertise}` === signature) === idx;
+  });
+  const priorFeedback = deduped.slice(0, 10).map((r) => ({
     domain: r.domain,
     overallRating: r.overallRating,
     reviewerExpertise: r.reviewerExpertise,
@@ -43,16 +49,26 @@ async function fetchModelGeneratedPlan(
   const res = await fetch(`${BACKEND_URL}/api/experiment-plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hypothesis, priorFeedback }),
+    body: JSON.stringify({ hypothesis, domain, priorFeedback }),
   });
   if (!res.ok) {
     const payload = (await res.json().catch(() => ({}))) as { error?: string; details?: string };
     const msg = [payload.error, payload.details].filter(Boolean).join(" — ");
     throw new Error(msg || "Experiment plan generation failed.");
   }
-  const data = (await res.json()) as { plan?: FullPlan; modelFlow?: ModelFlow; feedbackSummary?: FeedbackSummary };
+  const data = (await res.json()) as {
+    plan?: FullPlan;
+    modelFlow?: ModelFlow;
+    feedbackSummary?: FeedbackSummary;
+    qualityChecks?: QualityChecks;
+  };
   if (!data?.plan) throw new Error("Backend did not return a plan.");
-  return { plan: data.plan, modelFlow: data.modelFlow, feedbackSummary: data.feedbackSummary };
+  return {
+    plan: data.plan,
+    modelFlow: data.modelFlow,
+    feedbackSummary: data.feedbackSummary,
+    qualityChecks: data.qualityChecks,
+  };
 }
 
 export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
@@ -60,6 +76,7 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
   const [plan, setPlan] = useState<FullPlan | null>(null);
   const [modelFlow, setModelFlow] = useState<ModelFlow | undefined>(undefined);
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary | undefined>(undefined);
+  const [qualityChecks, setQualityChecks] = useState<QualityChecks | undefined>(undefined);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
@@ -80,6 +97,7 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
         addToHistory(hypothesis, generated.plan);
         setModelFlow(generated.modelFlow);
         setFeedbackSummary(generated.feedbackSummary);
+        setQualityChecks(generated.qualityChecks);
         setPlan(generated.plan);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Plan generation failed.");
@@ -100,6 +118,7 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
         hypothesis={hypothesis}
         modelFlow={modelFlow}
         feedbackSummary={feedbackSummary}
+        qualityChecks={qualityChecks}
       />
     );
   }

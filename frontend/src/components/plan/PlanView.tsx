@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FullPlan } from "@/types/plan";
+import type { FullPlan, QualityChecks } from "@/types/plan";
 import { OverviewTab } from "./OverviewTab";
 import { ProtocolTab } from "./ProtocolTab";
 import { MaterialsTab } from "./MaterialsTab";
@@ -36,11 +36,13 @@ export function PlanView({
   hypothesis,
   modelFlow,
   feedbackSummary,
+  qualityChecks,
 }: {
   plan: FullPlan;
   hypothesis: string;
   modelFlow?: ModelFlow;
   feedbackSummary?: FeedbackSummary;
+  qualityChecks?: QualityChecks;
 }) {
   const [tab, setTab] = useState<TabId>("overview");
   const priorReviews = getReviewsForDomain(plan.domain);
@@ -105,6 +107,22 @@ export function PlanView({
               <li key={`${item}-${idx}`}>{item}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {!!qualityChecks && (
+        <div
+          className={`rounded-xl border p-4 space-y-2 ${qualityChecks.gatesPassed ? "border-emerald-500/30 bg-emerald-500/5" : "border-rose-500/30 bg-rose-500/5"}`}
+          data-print-hide
+        >
+          <p className="text-sm font-medium">
+            Judge quality score: <span className="font-mono">{qualityChecks.scoreOutOf10.toFixed(1)}/10</span>
+            {" · "}
+            <span>{qualityChecks.gatesPassed ? "Quality gates passed" : "Quality gates failed"}</span>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Completeness {qualityChecks.dimensions.completeness.toFixed(1)} · Evidence {qualityChecks.dimensions.evidenceGrounding.toFixed(1)} · Operational realism {qualityChecks.dimensions.operationalRealism.toFixed(1)}
+          </p>
         </div>
       )}
 

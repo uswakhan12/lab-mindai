@@ -1,13 +1,17 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
+import { getRecentReviews, getReviewsByDomain, saveReviewRecord } from "./feedback-db.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const TAVILY_URL = "https://api.tavily.com/search";
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 30;
 /** Tavily rejects queries longer than this (see API error: "Max query length is 400 characters"). */
 const TAVILY_MAX_QUERY_LENGTH = 400;
 const TAVILY_QUERY_SUFFIX = "\n\npapers protocols prior work";
+const requestBuckets = new Map();
 
 function clipQuery(text, max = TAVILY_MAX_QUERY_LENGTH) {
   const s = String(text).trim().replace(/\s+/g, " ");
@@ -26,8 +30,69 @@ function buildTavilySearchQuery(hypothesis) {
   return `${head}…${suffix}`;
 }
 
+function inferDomainFromHypothesis(hypothesis) {
+  const h = String(hypothesis || "").toLowerCase();
+  if (/(hela|cell|cryoprotect|transfection|culture|q?pcr|western blot|assay)/.test(h)) return "cell_biology";
+  if (/(mice|mouse|gut|microbiome|lactobacillus|intestinal)/.test(h)) return "gut_health";
+  if (/(biosensor|electrochemical|diagnostic|crp|elisa|blood)/.test(h)) return "diagnostics";
+  if (/(co2|bioelectrochemical|sporomusa|climate|acetate|cathode)/.test(h)) return "climate";
+  return "general_biomedical";
+}
+
+function mergedFeedback(clientFeedback, dbFeedback) {
+  const all = [...(Array.isArray(clientFeedback) ? clientFeedback : []), ...(Array.isArray(dbFeedback) ? dbFeedback : [])];
+  const seen = new Set();
+  const out = [];
+  for (const item of all) {
+    const sig = JSON.stringify({
+      domain: item?.domain,
+      corrections: item?.corrections,
+      issues: item?.issues,
+      overallRating: item?.overallRating,
+      reviewerExpertise: item?.reviewerExpertise,
+    });
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    out.push(item);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  res.locals.requestId = requestId;
+  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const now = Date.now();
+  const bucket = requestBuckets.get(ip) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+  if (now > bucket.resetAt) {
+    bucket.count = 0;
+    bucket.resetAt = now + RATE_LIMIT_WINDOW_MS;
+  }
+  bucket.count += 1;
+  requestBuckets.set(ip, bucket);
+  res.setHeader("x-request-id", requestId);
+  if (bucket.count > RATE_LIMIT_MAX) {
+    const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+    res.setHeader("Retry-After", String(retryAfter));
+    return res.status(429).json({ error: "Rate limit exceeded. Please retry shortly.", requestId });
+  }
+  const started = Date.now();
+  res.on("finish", () => {
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify({
+      ts: new Date().toISOString(),
+      requestId,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      latencyMs: Date.now() - started,
+    }));
+  });
+  return next();
+});
 
 function inferNoveltySignal(resultsCount, topScore) {
   if (resultsCount === 0) return "not_found";
@@ -571,8 +636,163 @@ function runSafetyChecks({ hypothesis, plan }) {
   return { ok: true };
 }
 
+function buildEvidenceCoverage(verificationSources) {
+  const sections = ["protocol", "materials", "budget", "timeline", "validation", "safety"];
+  const coverage = {};
+  let coveredCount = 0;
+  for (const section of sections) {
+    const list = Array.isArray(verificationSources?.[section]) ? verificationSources[section] : [];
+    const hasEvidence = list.length > 0;
+    coverage[section] = {
+      references: list.length,
+      hasValidated: list.some((s) => s?.validationStatus === "validated"),
+      hasEvidence,
+    };
+    if (hasEvidence) coveredCount += 1;
+  }
+  return { coverage, coveredCount, totalSections: sections.length };
+}
+
+function evaluatePlanQuality({ hypothesis, plan }) {
+  const errors = [];
+  const warnings = [];
+  const ep = plan?.experimentPlan || {};
+  const materials = Array.isArray(ep.materials) ? ep.materials : [];
+  const budgetItems = Array.isArray(ep?.budget?.byCategory) ? ep.budget.byCategory : [];
+  const timelinePhases = Array.isArray(ep?.timeline?.phases) ? ep.timeline.phases : [];
+  const protocolPhases = Array.isArray(ep?.protocol?.phases) ? ep.protocol.phases : [];
+  const totalProtocolSteps = protocolPhases.reduce(
+    (n, p) => n + (Array.isArray(p?.steps) ? p.steps.length : 0),
+    0,
+  );
+  const refs = plan?.literatureQC?.references || [];
+  const hypothesisText = String(hypothesis || "").toLowerCase();
+
+  if (totalProtocolSteps < 4) errors.push("Protocol must contain at least 4 executable steps.");
+  if (materials.length < 5) errors.push("Materials list is too sparse (<5 items).");
+  const missingCatalog = materials.filter((m) => !String(m?.catalogNumber || "").trim()).length;
+  if (missingCatalog > 0) warnings.push(`${missingCatalog} material(s) missing catalog numbers.`);
+  const unresolvedCatalog = materials.filter((m) => String(m?.catalogNumber || "").includes("VERIFY-CATALOG")).length;
+  if (unresolvedCatalog > 0) warnings.push(`${unresolvedCatalog} material(s) still use VERIFY-CATALOG placeholders.`);
+
+  const materialsSubtotal = materials.reduce((sum, m) => sum + Number(m?.totalCostUSD || 0), 0);
+  const budgetSubtotal = budgetItems.reduce((sum, b) => sum + Number(b?.amountUSD || 0), 0);
+  const contingencyPct = Number(ep?.budget?.contingencyPercent || 0);
+  const expectedTotal = Math.round(budgetSubtotal * (1 + contingencyPct / 100));
+  const reportedTotal = Math.round(Number(ep?.budget?.totalWithContingencyUSD || 0));
+  if (budgetSubtotal <= 0 || reportedTotal <= 0) errors.push("Budget totals are missing or invalid.");
+  if (Math.abs(expectedTotal - reportedTotal) > Math.max(5, expectedTotal * 0.08)) {
+    warnings.push("Budget total with contingency is inconsistent with category subtotal.");
+  }
+  if (materialsSubtotal > 0 && budgetSubtotal > 0 && Math.abs(materialsSubtotal - budgetSubtotal) > budgetSubtotal * 0.5) {
+    warnings.push("Materials total deviates heavily from budget category subtotal.");
+  }
+
+  const invalidTimeline = timelinePhases.some((p) => Number(p?.endDay) <= Number(p?.startDay));
+  if (invalidTimeline) errors.push("Timeline has phases with non-positive duration.");
+  const timelineTotal = timelinePhases.reduce((max, p) => Math.max(max, Number(p?.endDay || 0)), 0);
+  if (Math.abs(timelineTotal - Number(ep?.totalDurationDays || 0)) > 7) {
+    warnings.push("Timeline max day does not closely match reported total duration.");
+  }
+
+  if (!Array.isArray(refs) || refs.length === 0) errors.push("Literature QC references are missing.");
+  if (!Array.isArray(ep?.validation?.successMetrics) || ep.validation.successMetrics.length === 0) {
+    errors.push("Validation success metrics are missing.");
+  }
+  if (!Array.isArray(ep?.safety?.requiredPPE) || ep.safety.requiredPPE.length === 0) {
+    warnings.push("Safety PPE list is empty.");
+  }
+  if (String(hypothesis || "").trim().length < 20) warnings.push("Hypothesis is very short and may reduce plan quality.");
+
+  const hasConcentrationUnits =
+    /\b(\d+(\.\d+)?)\s?(mg\/l|mg\/ml|ug\/ml|ng\/ml|mm|um|nm|mmol\/l|mol\/l|%|mM|uM)\b/i.test(hypothesisText) ||
+    /\b(\d+(\.\d+)?)\s?(mg\/l|mg\/ml|ug\/ml|ng\/ml|mm|um|nm|mmol\/l|mol\/l|%)\b/i.test(JSON.stringify(ep.protocol || ""));
+  if (!hasConcentrationUnits) {
+    warnings.push("No explicit concentration/dose units detected in hypothesis/protocol.");
+  }
+
+  const hasStatisticalSignal =
+    /\b(p\s?[<=>]\s?0\.\d+|confidence interval|anova|t-test|mann-?whitney|chi-?square)\b/i.test(
+      String(ep?.validation?.statisticalPlan || ""),
+    );
+  if (!hasStatisticalSignal) {
+    warnings.push("Statistical plan does not clearly mention a concrete test/threshold.");
+  }
+
+  const sampleSizeText = String(ep?.validation?.sampleSize || "");
+  const sampleN = sampleSizeText.match(/\b(\d{1,4})\b/g)?.map((n) => Number(n)) || [];
+  if (sampleN.length === 0) {
+    warnings.push("Sample size lacks explicit numeric values.");
+  } else if (Math.max(...sampleN) < 3) {
+    errors.push("Sample size appears too low for meaningful inference.");
+  }
+
+  const hazardCount = Array.isArray(ep?.safety?.hazardousMaterials) ? ep.safety.hazardousMaterials.length : 0;
+  const hasEmergency = Array.isArray(ep?.safety?.emergencyProcedures) && ep.safety.emergencyProcedures.length > 0;
+  if (hazardCount > 0 && !hasEmergency) {
+    errors.push("Safety section lists hazards but no emergency procedures.");
+  }
+
+  const evidence = buildEvidenceCoverage(plan?.verificationSources);
+  const normalizedEvidence = evidence.coveredCount / evidence.totalSections;
+  if (evidence.coveredCount < 4) warnings.push("Verification evidence is sparse across plan sections.");
+
+  const completenessScore = Math.max(0, 10 - errors.length * 2 - warnings.length * 0.5);
+  const evidenceScore = Math.round(normalizedEvidence * 10 * 10) / 10;
+  const operationalScore = Math.max(
+    0,
+    10 -
+      (totalProtocolSteps < 6 ? 2 : 0) -
+      (materials.length < 8 ? 1.5 : 0) -
+      (timelinePhases.length < 3 ? 1.5 : 0) -
+      (errors.length > 0 ? 2 : 0),
+  );
+  const score = Math.round(((completenessScore * 0.35 + evidenceScore * 0.3 + operationalScore * 0.35) * 10)) / 10;
+  return {
+    scoreOutOf10: Math.max(0, Math.min(10, score)),
+    gatesPassed: errors.length === 0,
+    dimensions: {
+      completeness: Math.round(completenessScore * 10) / 10,
+      evidenceGrounding: evidenceScore,
+      operationalRealism: Math.round(operationalScore * 10) / 10,
+    },
+    evidenceCoverage: evidence.coverage,
+    warnings,
+    errors,
+  };
+}
+
 app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, rateLimit: { windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX } });
+});
+
+app.get("/api/reviews", async (req, res) => {
+  try {
+    const domain = typeof req.query.domain === "string" ? req.query.domain.trim() : "";
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+    const reviews = domain ? await getReviewsByDomain(domain, limit) : await getRecentReviews(limit);
+    return res.json({ version: 1, requestId: res.locals.requestId, reviews });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected server error.";
+    return res.status(500).json({ error: message, requestId: res.locals.requestId });
+  }
+});
+
+app.post("/api/reviews", async (req, res) => {
+  try {
+    const review = req.body || {};
+    if (!review?.id || !review?.timestamp || !review?.hypothesis || !review?.domain) {
+      return res.status(400).json({
+        error: "Review payload requires id, timestamp, hypothesis, and domain.",
+        requestId: res.locals.requestId,
+      });
+    }
+    await saveReviewRecord(review);
+    return res.status(201).json({ ok: true, requestId: res.locals.requestId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected server error.";
+    return res.status(500).json({ error: message, requestId: res.locals.requestId });
+  }
 });
 
 app.post("/api/literature-qc", async (req, res) => {
@@ -667,13 +887,19 @@ app.post("/api/plan-sources", async (req, res) => {
 });
 
 app.post("/api/experiment-plan", async (req, res) => {
+  const started = Date.now();
   try {
-    const { hypothesis, priorFeedback = [] } = req.body || {};
+    const { hypothesis, priorFeedback = [], domain: clientDomain } = req.body || {};
     if (!hypothesis || typeof hypothesis !== "string" || hypothesis.trim().length < 6) {
       return res.status(400).json({ error: "Hypothesis is required." });
     }
 
     const baseHypo = hypothesis.trim();
+    const inferredDomain = clientDomain && String(clientDomain).trim().length > 0
+      ? String(clientDomain).trim()
+      : inferDomainFromHypothesis(baseHypo);
+    const dbPriorFeedback = await getReviewsByDomain(inferredDomain, 8);
+    const allPriorFeedback = mergedFeedback(priorFeedback, dbPriorFeedback);
     const tavilyKey = process.env.TAVILY_API_KEY;
     const llama8Model = process.env.LLAMA8_MODEL || "llama-3.1-8b-instant";
     const rawLlama70 = process.env.LLAMA70_MODEL || "llama-3.3-70b-versatile";
@@ -690,7 +916,7 @@ app.post("/api/experiment-plan", async (req, res) => {
       hypothesis: baseHypo,
       tavilyKey,
       llama8Model,
-      priorFeedback,
+      priorFeedback: allPriorFeedback,
     });
 
     const planPrompt = buildPlanPrompt({ hypothesis: baseHypo, retrievalPacket });
@@ -749,29 +975,37 @@ app.post("/api/experiment-plan", async (req, res) => {
       return res.status(422).json({
         error: "Plan requires human safety review before release.",
         details: safetyCheck.reason,
+        requestId: res.locals.requestId,
       });
     }
+    const qualityChecks = evaluatePlanQuality({ hypothesis: baseHypo, plan });
 
     return res.json({
       version: 1,
+      requestId: res.locals.requestId,
       modelFlow: {
         retrievalModel: `${retrievalPacket.modelFlow?.retrieval || "tavily"} + source-check:${llama8Model}`,
         planningModel,
       },
       feedbackSummary: {
-        priorFeedbackCount: Array.isArray(priorFeedback) ? priorFeedback.length : 0,
-        appliedHighlights: Array.isArray(priorFeedback)
-          ? priorFeedback
+        priorFeedbackCount: Array.isArray(allPriorFeedback) ? allPriorFeedback.length : 0,
+        appliedHighlights: Array.isArray(allPriorFeedback)
+          ? allPriorFeedback
               .flatMap((f) => Object.values(f?.corrections || {}))
               .filter((c) => typeof c === "string" && c.trim().length > 0)
               .slice(0, 3)
           : [],
       },
+      qualityChecks,
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        generationLatencyMs: Date.now() - started,
+      },
       plan,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected server error.";
-    return res.status(500).json({ error: message });
+    return res.status(500).json({ error: message, requestId: res.locals.requestId });
   }
 });
 

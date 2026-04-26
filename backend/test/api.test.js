@@ -48,3 +48,28 @@ test("POST /api/experiment-plan validates hypothesis input", async () => {
   const body = await res.json();
   assert.match(body.error || "", /Hypothesis is required/i);
 });
+
+test("POST /api/reviews and GET /api/reviews roundtrip", async () => {
+  const review = {
+    id: `test-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    hypothesis: "Trehalose improves HeLa post-thaw viability.",
+    domain: "cell_biology",
+    reviewerExpertise: "PI",
+    overallRating: 4,
+    issues: { protocol: "", materials: "", budget: "", timeline: "", validation: "" },
+    corrections: { protocol: "Add controlled thaw duration.", materials: "", budget: "", timeline: "", validation: "" },
+  };
+  const create = await fetch(`${baseUrl}/api/reviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(review),
+  });
+  assert.equal(create.status, 201);
+
+  const list = await fetch(`${baseUrl}/api/reviews?domain=cell_biology&limit=5`);
+  assert.equal(list.status, 200);
+  const payload = await list.json();
+  assert.ok(Array.isArray(payload.reviews));
+  assert.ok(payload.reviews.some((r) => r.id === review.id));
+});

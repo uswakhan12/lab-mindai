@@ -133,3 +133,21 @@ export interface FullPlan {
     confidence: { section: string; level: "High" | "Medium" | "Low"; reason: string }[];
   };
 }
+
+export interface QualityChecks {
+  scoreOutOf10: number;
+  gatesPassed: boolean;
+  dimensions: {
+    completeness: number;
+    evidenceGrounding: number;
+    operationalRealism: number;
+  };
+  evidenceCoverage?: Partial<
+    Record<
+      PlanVerificationSection,
+      { references: number; hasValidated: boolean; hasEvidence: boolean }
+    >
+  >;
+  warnings: string[];
+  errors: string[];
+}
