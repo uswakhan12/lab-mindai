@@ -33,6 +33,13 @@ export interface NoveltyDiagnostics {
   noveltySignal: NoveltySignal;
   topRetrievalScore: number;
   topHypothesisOverlap: number;
+  /** Trigram cosine between hypothesis and each reference (embedding-style proxy). */
+  topTrigramSimilarity?: number;
+  /** Fused hypothesis↔reference score after rerank. */
+  topCombinedEvidence?: number;
+  /** Max trigram alignment between protocol skeleton text and retrieval hits. */
+  protocolToPacketAlignment?: number;
+  rerankMethod?: string;
   hasProtocolRepositoryHit: boolean;
   hasVendorOrResourceHit: boolean;
   rulesTriggered: string[];
@@ -43,8 +50,33 @@ export interface NoveltyDiagnostics {
     url: string;
     retrievalScore: number;
     hypothesisTokenOverlap: number;
+    trigramSimilarity?: number;
+    protocolTrigramAlignment?: number;
+    combinedEvidenceScore?: number;
     hostKind: string;
   }>;
+}
+
+/** Server-computed A/B style feedback vs counterfactual quality note (same plan, rubric-derived). */
+export interface FeedbackLearningReport {
+  version: number;
+  enabled: boolean;
+  reason?: string;
+  methodologyNote?: string;
+  priorReviewsUsed?: number;
+  priorSnippetsAnalyzed?: number;
+  adoption?: {
+    matchRate: number;
+    matchedCount: number;
+    totalPhrases: number;
+    matchedSamples?: string[];
+    missedSamples?: string[];
+  } | null;
+  qualityComparison?: {
+    scoreAfterFeedback: number;
+    counterfactualScoreIfCorrectionsIgnored: number;
+    estimatedQualityDeltaFromFeedback: number;
+  } | null;
 }
 
 /** Live web hit used to cross-check plan assumptions (from Tavily). */

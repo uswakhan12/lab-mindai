@@ -127,6 +127,10 @@ function mockNoveltyDiagnostics(domain: string): NoveltyDiagnostics {
     noveltySignal: domain === "cell_biology" ? "similar_exists" : "not_found",
     topRetrievalScore: domain === "cell_biology" ? 0.81 : 0.55,
     topHypothesisOverlap: domain === "cell_biology" ? 0.24 : 0.11,
+    topTrigramSimilarity: domain === "cell_biology" ? 0.19 : 0.08,
+    topCombinedEvidence: domain === "cell_biology" ? 0.44 : 0.31,
+    protocolToPacketAlignment: 0,
+    rerankMethod: "mock",
     hasProtocolRepositoryHit: false,
     hasVendorOrResourceHit: false,
     rulesTriggered: [

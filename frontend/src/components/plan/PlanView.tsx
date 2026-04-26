@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type {
   ExecutionReadiness,
+  FeedbackLearningReport,
   FullPlan,
   QualityChecks,
   ScientificMechanistic,
@@ -56,6 +57,7 @@ interface FeedbackSummary {
   appliedHighlights?: string[];
   feedbackMatch?: { method: string; ontologyTags: string[]; similarReviewCount: number };
   incorporationReport?: IncorporationReportRow[];
+  feedbackLearningReport?: FeedbackLearningReport;
 }
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -334,6 +336,64 @@ export function PlanView({
           </div>
         </details>
       )}
+
+      {feedbackSummary?.feedbackLearningReport?.enabled ? (
+        <div
+          className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4 text-sm space-y-2"
+          data-print-hide
+        >
+          <p className="text-xs font-semibold uppercase tracking-widest text-cyan-200/90">
+            Learning loop — measured vs counterfactual
+          </p>
+          {feedbackSummary.feedbackLearningReport.qualityComparison ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                <p className="text-muted-foreground">Observed rubric score</p>
+                <p className="font-mono text-lg text-foreground">
+                  {feedbackSummary.feedbackLearningReport.qualityComparison.scoreAfterFeedback.toFixed(
+                    2,
+                  )}
+                  <span className="text-muted-foreground text-sm">/10</span>
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                <p className="text-muted-foreground">Counterfactual (no adoption credit)</p>
+                <p className="font-mono text-lg text-foreground">
+                  {feedbackSummary.feedbackLearningReport.qualityComparison.counterfactualScoreIfCorrectionsIgnored.toFixed(
+                    2,
+                  )}
+                  <span className="text-muted-foreground text-sm">/10</span>
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                <p className="text-muted-foreground">Δ attributed to feedback text</p>
+                <p className="font-mono text-lg text-cyan-100">
+                  +
+                  {feedbackSummary.feedbackLearningReport.qualityComparison.estimatedQualityDeltaFromFeedback.toFixed(
+                    2,
+                  )}
+                </p>
+              </div>
+            </div>
+          ) : null}
+          {feedbackSummary.feedbackLearningReport.adoption ? (
+            <p className="text-xs text-muted-foreground">
+              Review phrase adoption:{" "}
+              <span className="font-mono text-foreground">
+                {(feedbackSummary.feedbackLearningReport.adoption.matchRate * 100).toFixed(0)}%
+              </span>{" "}
+              ({feedbackSummary.feedbackLearningReport.adoption.matchedCount}/
+              {feedbackSummary.feedbackLearningReport.adoption.totalPhrases} phrases matched in plan
+              JSON).
+            </p>
+          ) : null}
+          {feedbackSummary.feedbackLearningReport.methodologyNote ? (
+            <p className="text-[11px] text-muted-foreground/90 leading-relaxed">
+              {feedbackSummary.feedbackLearningReport.methodologyNote}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {!!qualityChecks && (
         <div

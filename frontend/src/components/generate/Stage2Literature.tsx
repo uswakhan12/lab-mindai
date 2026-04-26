@@ -188,7 +188,7 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
               <span className="text-foreground/90">Signal alignment:</span>{" "}
               {result.noveltyDiagnostics.signalAlignmentNote}
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-[11px] text-muted-foreground">
               <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
                 Top score{" "}
                 <span className="font-mono text-foreground">
@@ -201,6 +201,30 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
                   {(result.noveltyDiagnostics.topHypothesisOverlap * 100).toFixed(0)}%
                 </span>
               </div>
+              {typeof result.noveltyDiagnostics.topTrigramSimilarity === "number" ? (
+                <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
+                  Trigram sim{" "}
+                  <span className="font-mono text-foreground">
+                    {result.noveltyDiagnostics.topTrigramSimilarity.toFixed(2)}
+                  </span>
+                </div>
+              ) : null}
+              {typeof result.noveltyDiagnostics.topCombinedEvidence === "number" ? (
+                <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
+                  Fused rank{" "}
+                  <span className="font-mono text-foreground">
+                    {result.noveltyDiagnostics.topCombinedEvidence.toFixed(2)}
+                  </span>
+                </div>
+              ) : null}
+              {typeof result.noveltyDiagnostics.protocolToPacketAlignment === "number" ? (
+                <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
+                  Protocol↔packet{" "}
+                  <span className="font-mono text-foreground">
+                    {result.noveltyDiagnostics.protocolToPacketAlignment.toFixed(2)}
+                  </span>
+                </div>
+              ) : null}
               <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
                 Protocol host hit{" "}
                 {result.noveltyDiagnostics.hasProtocolRepositoryHit ? "yes" : "no"}
@@ -242,6 +266,9 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
                     <Badge variant="outline" className="text-[10px] font-normal border-border">
                       {hostKindLabel(diag.hostKind)} · score {diag.retrievalScore.toFixed(2)} ·
                       overlap {(diag.hypothesisTokenOverlap * 100).toFixed(0)}%
+                      {typeof diag.trigramSimilarity === "number"
+                        ? ` · tri ${diag.trigramSimilarity.toFixed(2)}`
+                        : ""}
                     </Badge>
                   ) : null}
                   <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />

@@ -19,6 +19,10 @@ test.describe("Full generate pipeline (mocked live APIs)", () => {
         noveltySignal: "similar_exists",
         topRetrievalScore: 0.84,
         topHypothesisOverlap: 0.22,
+        topTrigramSimilarity: 0.17,
+        topCombinedEvidence: 0.46,
+        protocolToPacketAlignment: 0.12,
+        rerankMethod: "e2e_mock",
         hasProtocolRepositoryHit: true,
         hasVendorOrResourceHit: false,
         rulesTriggered: [
@@ -93,6 +97,11 @@ test.describe("Full generate pipeline (mocked live APIs)", () => {
           },
           appliedHighlights: [],
           incorporationReport: [],
+          feedbackLearningReport: {
+            version: 1,
+            enabled: false,
+            reason: "no_prior_reviews_in_prompt",
+          },
         },
         qualityChecks: {
           scoreOutOf10: 8.5,

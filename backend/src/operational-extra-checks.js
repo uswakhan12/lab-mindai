@@ -68,9 +68,5 @@ export function runOperationalExtraChecks({ hypothesis, plan, scientificMechanis
     );
   }
 
-  if (/\bclinical\b|\bhuman subjects\b/i.test(hypo) && !/\birb\b|\bethics\b/i.test(blob)) {
-    warnings.push("Hypothesis suggests human work but protocol text lacks explicit IRB/ethics mention — add governance steps.");
-  }
-
   return { warnings, errors };
 }

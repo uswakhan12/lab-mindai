@@ -3,6 +3,7 @@ import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
   ExecutionReadiness,
+  FeedbackLearningReport,
   FullPlan,
   QualityChecks,
   ScientificMechanistic,
@@ -38,6 +39,7 @@ interface FeedbackSummary {
   priorFeedbackCount?: number;
   appliedHighlights?: string[];
   feedbackMatch?: { method: string; ontologyTags: string[]; similarReviewCount: number };
+  feedbackLearningReport?: FeedbackLearningReport;
 }
 
 async function fetchModelGeneratedPlan(hypothesis: string): Promise<{
@@ -77,14 +79,21 @@ async function fetchModelGeneratedPlan(hypothesis: string): Promise<{
       error?: string;
       details?: string;
       procurementGateErrors?: string[];
+      governanceGateErrors?: string[];
     };
-    const gate =
+    const procGate =
       res.status === 422 &&
       Array.isArray(payload.procurementGateErrors) &&
       payload.procurementGateErrors.length > 0
         ? `\n${payload.procurementGateErrors.join("\n")}`
         : "";
-    const msg = [payload.error, payload.details].filter(Boolean).join(" — ") + gate;
+    const govGate =
+      res.status === 422 &&
+      Array.isArray(payload.governanceGateErrors) &&
+      payload.governanceGateErrors.length > 0
+        ? `\n${payload.governanceGateErrors.join("\n")}`
+        : "";
+    const msg = [payload.error, payload.details].filter(Boolean).join(" — ") + procGate + govGate;
     throw new Error(msg || "Experiment plan generation failed.");
   }
   const data = (await res.json()) as {

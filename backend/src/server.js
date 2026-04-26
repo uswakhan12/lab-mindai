@@ -13,6 +13,8 @@ import { computeExecutionReadiness } from "./execution-readiness.js";
 import { buildNoveltyDiagnostics } from "./novelty-diagnostics.js";
 import { validatePlanGrounding, isProcurementCriticalMaterial } from "./grounding-validator.js";
 import { runOperationalExtraChecks } from "./operational-extra-checks.js";
+import { validateGovernanceRelease } from "./governance-gate.js";
+import { computeFeedbackLearningReport } from "./feedback-learning-report.js";
 import { generatePlanOutline } from "./plan-outline.js";
 
 const app = express();
@@ -1260,6 +1262,12 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
     if (!plan.literatureQC || !hasMeaningfulReferences(plan.literatureQC.references)) {
       plan.literatureQC = retrievalPacket.literatureQC;
     }
+    plan.literatureQC.noveltyDiagnostics = buildNoveltyDiagnostics(
+      baseHypo,
+      plan.literatureQC.references || [],
+      plan.literatureQC.noveltySignal,
+      { experimentPlan: plan.experimentPlan },
+    );
 
     const scientificMechanistic = runScientificMechanisticValidation({
       hypothesis: baseHypo,
@@ -1281,6 +1289,11 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
     let qualityChecks = evaluatePlanQuality({ hypothesis: baseHypo, plan });
     const groundingCheck = validatePlanGrounding(plan, retrievalPacket);
     if (groundingCheck.procurementGateFailed) {
+      const feedbackLearningReport = computeFeedbackLearningReport({
+        plan,
+        allPriorFeedback,
+        qualityChecks,
+      });
       return res.status(422).json({
         error: "Procurement grounding gate failed: critical reagents / antibodies / cell inputs must cite an allow-listed URL from literature QC or post-plan verification.",
         procurementGateErrors: groundingCheck.errors,
@@ -1294,6 +1307,25 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
           warnings: [...qualityChecks.warnings, ...groundingCheck.warnings],
         },
         scientificMechanistic,
+        feedbackSummary: {
+          priorFeedbackCount: Array.isArray(allPriorFeedback) ? allPriorFeedback.length : 0,
+          feedbackMatch: {
+            method: similarPack.matchMethod,
+            ontologyTags: similarPack.ontologyTags,
+            similarReviewCount: similarPack.reviews.length,
+          },
+          appliedHighlights: Array.isArray(allPriorFeedback)
+            ? allPriorFeedback
+                .flatMap((f) => [
+                  ...Object.values(f?.corrections || {}),
+                  ...Object.values(f?.issues || {}),
+                ])
+                .filter((c) => typeof c === "string" && c.trim().length > 0)
+                .slice(0, 8)
+            : [],
+          incorporationReport: buildIncorporationReport(allPriorFeedback),
+          feedbackLearningReport,
+        },
         metadata: {
           generatedAt: generatedAtIso,
           generationLatencyMs: Date.now() - started,
@@ -1319,6 +1351,58 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
         ...qualityChecks,
         warnings: [...qualityChecks.warnings, scientificMechanistic.powerSketch.note],
       };
+    }
+
+    const feedbackLearningReport = computeFeedbackLearningReport({
+      plan,
+      allPriorFeedback,
+      qualityChecks,
+    });
+
+    const governanceCheck = validateGovernanceRelease({ hypothesis: baseHypo, plan });
+    if (!governanceCheck.ok) {
+      return res.status(422).json({
+        error:
+          "Governance gate failed: when human subjects, vertebrate animal work, or elevated biocontainment / viral-vector work is implied, the plan must explicitly reference IRB/ethics, IACUC, or IBC review as appropriate.",
+        governanceGateErrors: governanceCheck.errors,
+        requestId: res.locals.requestId,
+        tenantId,
+        modelFlow: {
+          retrievalModel: `${retrievalPacket.modelFlow?.retrieval || "tavily"} + source-check:${llama8Model}`,
+          planningModel,
+          retrievalOutlineUsed: Boolean(retrievalOutline),
+        },
+        plan,
+        qualityChecks: {
+          ...qualityChecks,
+          gatesPassed: false,
+          errors: [...qualityChecks.errors, ...governanceCheck.errors],
+        },
+        scientificMechanistic,
+        feedbackSummary: {
+          priorFeedbackCount: Array.isArray(allPriorFeedback) ? allPriorFeedback.length : 0,
+          feedbackMatch: {
+            method: similarPack.matchMethod,
+            ontologyTags: similarPack.ontologyTags,
+            similarReviewCount: similarPack.reviews.length,
+          },
+          appliedHighlights: Array.isArray(allPriorFeedback)
+            ? allPriorFeedback
+                .flatMap((f) => [
+                  ...Object.values(f?.corrections || {}),
+                  ...Object.values(f?.issues || {}),
+                ])
+                .filter((c) => typeof c === "string" && c.trim().length > 0)
+                .slice(0, 8)
+            : [],
+          incorporationReport: buildIncorporationReport(allPriorFeedback),
+          feedbackLearningReport,
+        },
+        metadata: {
+          generatedAt: generatedAtIso,
+          generationLatencyMs: Date.now() - started,
+        },
+      });
     }
 
     return res.json({
@@ -1347,6 +1431,7 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
               .slice(0, 8)
           : [],
         incorporationReport: buildIncorporationReport(allPriorFeedback),
+        feedbackLearningReport,
       },
       qualityChecks,
       executionReadiness: computeExecutionReadiness({
