@@ -1,5 +1,14 @@
 const BASE_URL = process.env.BENCHMARK_BASE_URL || "http://localhost:8080";
 
+function benchmarkHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const key = process.env.LABMIND_API_KEY?.trim();
+  if (key) h.Authorization = `Bearer ${key}`;
+  const tenant = process.env.BENCHMARK_TENANT_ID?.trim();
+  if (tenant) h["x-tenant-id"] = tenant;
+  return h;
+}
+
 const SAMPLE_HYPOTHESES = [
   "A paper-based electrochemical biosensor functionalized with anti-CRP antibodies will detect C-reactive protein in whole blood at concentrations below 0.5 mg/L within 10 minutes, matching laboratory ELISA sensitivity without requiring sample preprocessing.",
   "Supplementing C57BL/6 mice with Lactobacillus rhamnosus GG for 4 weeks will reduce intestinal permeability by at least 30% compared to controls, measured by FITC-dextran assay, due to upregulation of tight junction proteins claudin-1 and occludin.",
@@ -11,7 +20,7 @@ async function runOne(hypothesis) {
   const started = Date.now();
   const res = await fetch(`${BASE_URL}/api/experiment-plan`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: benchmarkHeaders(),
     body: JSON.stringify({ hypothesis, priorFeedback: [] }),
   });
   const body = await res.json().catch(() => ({}));

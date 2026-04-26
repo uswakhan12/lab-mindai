@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { FullPlan, QualityChecks } from "@/types/plan";
+import type { ExecutionReadiness, FullPlan, QualityChecks, ScientificMechanistic } from "@/types/plan";
 import { detectDomain, generateMockPlan } from "@/lib/plan-generator";
-import { addToHistory, fetchReviewsForDomain, getReviewsForDomain } from "@/lib/storage";
+import { addToHistory, fetchReviewsForDomain, getReviewsForDomain, labmindApiHeaders } from "@/lib/storage";
 import { fetchPlanVerificationSources } from "@/lib/fetch-plan-sources";
 import { PlanView } from "@/components/plan/PlanView";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
 
 const LOADING_STEPS = [
-  "📚 Searching PubMed for related protocols...",
+  "📚 Searching literature + protocols.io / Bio-protocol for prior work…",
   "🔬 Identifying required reagents from Sigma-Aldrich catalog...",
   "💰 Estimating costs based on current supplier pricing...",
   "📅 Building timeline with phase dependencies...",
@@ -26,11 +26,19 @@ interface ModelFlow {
 interface FeedbackSummary {
   priorFeedbackCount?: number;
   appliedHighlights?: string[];
+  feedbackMatch?: { method: string; ontologyTags: string[]; similarReviewCount: number };
 }
 
 async function fetchModelGeneratedPlan(
   hypothesis: string,
-): Promise<{ plan: FullPlan; modelFlow?: ModelFlow; feedbackSummary?: FeedbackSummary; qualityChecks?: QualityChecks }> {
+): Promise<{
+  plan: FullPlan;
+  modelFlow?: ModelFlow;
+  feedbackSummary?: FeedbackSummary;
+  qualityChecks?: QualityChecks;
+  scientificMechanistic?: ScientificMechanistic;
+  executionReadiness?: ExecutionReadiness;
+}> {
   const { domain } = detectDomain(hypothesis);
   const localFeedback = getReviewsForDomain(domain).slice(-5);
   const remoteFeedback = await fetchReviewsForDomain(domain, 8);
@@ -48,7 +56,7 @@ async function fetchModelGeneratedPlan(
 
   const res = await fetch(`${BACKEND_URL}/api/experiment-plan`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: labmindApiHeaders(),
     body: JSON.stringify({ hypothesis, domain, priorFeedback }),
   });
   if (!res.ok) {
@@ -61,6 +69,8 @@ async function fetchModelGeneratedPlan(
     modelFlow?: ModelFlow;
     feedbackSummary?: FeedbackSummary;
     qualityChecks?: QualityChecks;
+    scientificMechanistic?: ScientificMechanistic;
+    executionReadiness?: ExecutionReadiness;
   };
   if (!data?.plan) throw new Error("Backend did not return a plan.");
   return {
@@ -68,6 +78,8 @@ async function fetchModelGeneratedPlan(
     modelFlow: data.modelFlow,
     feedbackSummary: data.feedbackSummary,
     qualityChecks: data.qualityChecks,
+    scientificMechanistic: data.scientificMechanistic,
+    executionReadiness: data.executionReadiness,
   };
 }
 
@@ -77,6 +89,8 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
   const [modelFlow, setModelFlow] = useState<ModelFlow | undefined>(undefined);
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary | undefined>(undefined);
   const [qualityChecks, setQualityChecks] = useState<QualityChecks | undefined>(undefined);
+  const [scientificMechanistic, setScientificMechanistic] = useState<ScientificMechanistic | undefined>(undefined);
+  const [executionReadiness, setExecutionReadiness] = useState<ExecutionReadiness | undefined>(undefined);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
@@ -98,6 +112,8 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
         setModelFlow(generated.modelFlow);
         setFeedbackSummary(generated.feedbackSummary);
         setQualityChecks(generated.qualityChecks);
+        setScientificMechanistic(generated.scientificMechanistic);
+        setExecutionReadiness(generated.executionReadiness);
         setPlan(generated.plan);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Plan generation failed.");
@@ -119,6 +135,8 @@ export function Stage3Plan({ hypothesis }: { hypothesis: string }) {
         modelFlow={modelFlow}
         feedbackSummary={feedbackSummary}
         qualityChecks={qualityChecks}
+        scientificMechanistic={scientificMechanistic}
+        executionReadiness={executionReadiness}
       />
     );
   }

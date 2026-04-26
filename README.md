@@ -12,7 +12,10 @@ Current implementation is full-stack:
 - **Stage 3 (Experiment Plan):** Retrieval-grounded Llama 70B planning with Gemini fallback
 - **Stage 3 citations:** Tavily source retrieval + Llama 8B source relevance checks
 - **Quality gates:** automated plan checks + section evidence coverage scoring
-- **Feedback learning store:** SQLite-backed shared review memory (`backend/data/labmind.sqlite`)
+- **Feedback learning store:** SQLite by default (`backend/data/labmind.sqlite`) or **Postgres** when `DATABASE_URL` is set (`docker-compose.yml` included)
+- **Multi-tenant + auth:** optional `LABMIND_API_KEY` (Bearer or `x-api-key`) on literature/plan/review routes; `x-tenant-id` scopes reviews per organisation
+- **Similar experiment retrieval:** ontology tags + keyword cosine (not just coarse domain)
+- **Mechanistic validation:** concentration vs assay heuristics, proportion power sketch, protocol step ↔ evidence links (`scientificMechanistic` in API + UI)
 
 ## Tech Stack
 
@@ -88,7 +91,7 @@ npm run dev
   - `npm run dev` - Start local development server
   - `npm run build` - Build production bundle
   - `npm run lint` - Run ESLint checks
-  - `npm run test:e2e` - Run Playwright E2E smoke tests
+  - `npm run test:e2e` - Run Playwright E2E tests (smoke + full Stage 1→3 pipeline with **mocked** backend APIs)
 - Backend (`backend/`)
   - `npm run dev` - Start backend with watch mode
   - `npm run start` - Start backend without watch
@@ -107,7 +110,9 @@ npm run dev
   - Generates full experiment plan using Llama 70B, grounded by retrieval packet
   - Falls back to Gemini if Llama 70B fails or quota is exhausted
   - Then attaches Tavily citations and validates those citations with Llama 8B
-  - Returns `modelFlow`, `feedbackSummary`, and `qualityChecks` (judge-style score, gates, evidence coverage)
+  - Merges **similar** prior reviews (ontology + keyword similarity) and domain reviews for the same `x-tenant-id`
+  - Returns `modelFlow`, `feedbackSummary`, `qualityChecks`, and **`scientificMechanistic`** (assay heuristics, power sketch, step-level evidence links)
+- `GET /api/reviews` / `POST /api/reviews` — list or store structured scientist reviews (tenant-scoped; requires `LABMIND_API_KEY` when that env is set)
 
 ## Project Structure
 
@@ -132,7 +137,8 @@ npm run dev
 
 ## Notes
 
-- History remains in browser `localStorage`, but scientist reviews are also persisted in backend SQLite for cross-user reuse.
+- History remains in browser `localStorage`; scientist reviews persist in **SQLite** (default) or **Postgres** when `DATABASE_URL` is set, scoped by `x-tenant-id`.
+- When `LABMIND_API_KEY` is set, mirror it in the frontend as `VITE_LABMIND_API_KEY` (and optional `VITE_LABMIND_TENANT_ID`) so the UI can call secured APIs.
 - If model calls fail, Stage 3 now shows a visible error and allows optional manual mock fallback.
 - Stage 2 and Stage 3 source checks include model validation status and confidence.
 - Backend includes basic observability (request ID + latency logs) and per-IP rate limiting.
@@ -159,6 +165,16 @@ Benchmark locally:
 cd backend
 npm run benchmark
 ```
+
+## Postgres (optional, multi-tenant / scale story)
+
+```bash
+docker compose up -d
+# set in backend/.env:
+# DATABASE_URL=postgres://labmind:labmind@localhost:5432/labmind
+```
+
+Restart the backend after changing `DATABASE_URL`. Reviews automatically use the `labmind_reviews` table with JSONB metadata.
 
 ## Troubleshooting
 

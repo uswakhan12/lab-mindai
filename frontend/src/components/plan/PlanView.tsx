@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { FullPlan, QualityChecks } from "@/types/plan";
+import type { ExecutionReadiness, FullPlan, QualityChecks, ScientificMechanistic } from "@/types/plan";
+import { Badge } from "@/components/ui/badge";
 import { OverviewTab } from "./OverviewTab";
 import { ProtocolTab } from "./ProtocolTab";
 import { MaterialsTab } from "./MaterialsTab";
@@ -19,6 +20,7 @@ interface ModelFlow {
 interface FeedbackSummary {
   priorFeedbackCount?: number;
   appliedHighlights?: string[];
+  feedbackMatch?: { method: string; ontologyTags: string[]; similarReviewCount: number };
 }
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -37,12 +39,16 @@ export function PlanView({
   modelFlow,
   feedbackSummary,
   qualityChecks,
+  scientificMechanistic,
+  executionReadiness,
 }: {
   plan: FullPlan;
   hypothesis: string;
   modelFlow?: ModelFlow;
   feedbackSummary?: FeedbackSummary;
   qualityChecks?: QualityChecks;
+  scientificMechanistic?: ScientificMechanistic;
+  executionReadiness?: ExecutionReadiness;
 }) {
   const [tab, setTab] = useState<TabId>("overview");
   const priorReviews = getReviewsForDomain(plan.domain);
@@ -68,7 +74,9 @@ export function PlanView({
       <div className="flex items-start justify-between gap-3 flex-wrap" data-print-hide>
         <div>
           <p className="text-xs uppercase tracking-widest text-primary mb-1">Stage 3 · Complete</p>
-          <h2 className="text-xl font-semibold">Your experiment plan is ready</h2>
+          <h2 className="text-xl font-semibold" data-testid="plan-ready-header">
+            Your experiment plan is ready
+          </h2>
           {modelFlow?.planningModel && (
             <p className="text-xs text-muted-foreground mt-1">
               Generated with{" "}
@@ -88,11 +96,83 @@ export function PlanView({
         </div>
       </div>
 
+      {!!executionReadiness && (
+        <div
+          data-testid="execution-readiness-panel"
+          className={cn(
+            "rounded-xl border p-4 space-y-3",
+            executionReadiness.tier === "order_ready" && "border-emerald-500/45 bg-emerald-500/[0.08]",
+            executionReadiness.tier === "pilot_ready" && "border-amber-500/45 bg-amber-500/[0.08]",
+            executionReadiness.tier === "draft" && "border-rose-500/40 bg-rose-500/[0.06]",
+          )}
+          data-print-hide
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1">
+                Lab execution readiness
+              </p>
+              <p className="text-2xl font-semibold tracking-tight">
+                {executionReadiness.scoreOutOf10.toFixed(1)}
+                <span className="text-base font-normal text-muted-foreground"> / 10</span>
+              </p>
+              <p className="text-sm text-foreground/90 mt-1 max-w-2xl leading-relaxed">{executionReadiness.headline}</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {executionReadiness.summary.passedChecks}/{executionReadiness.summary.totalChecks} automated checks ·{" "}
+                {executionReadiness.summary.protocolSteps} protocol steps · {executionReadiness.summary.materialLines}{" "}
+                material lines · {executionReadiness.summary.validatedSourceSections} sections with validated sources
+              </p>
+            </div>
+            <Badge
+              className={cn(
+                "shrink-0 border text-xs uppercase tracking-wide",
+                executionReadiness.tier === "order_ready" && "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
+                executionReadiness.tier === "pilot_ready" && "bg-amber-500/20 text-amber-100 border-amber-500/40",
+                executionReadiness.tier === "draft" && "bg-rose-500/15 text-rose-100 border-rose-500/35",
+              )}
+            >
+              {executionReadiness.tier === "order_ready"
+                ? "Order review"
+                : executionReadiness.tier === "pilot_ready"
+                  ? "Pilot study"
+                  : "Draft"}
+            </Badge>
+          </div>
+          <ul className="grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2">
+            {executionReadiness.checklist.map((c) => (
+              <li key={c.id} className="flex gap-2 items-start rounded-lg bg-card/40 border border-border/60 px-2.5 py-1.5">
+                <span className={cn("shrink-0 font-mono", c.ok ? "text-emerald-400" : "text-amber-400")}>
+                  {c.ok ? "✓" : "!"}
+                </span>
+                <span className="leading-snug">{c.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Demo banner if prior feedback exists */}
       {priorReviews.length > 0 && (
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3" data-print-hide>
           <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
           <p className="text-sm">💡 This plan was improved by <strong>{priorReviews.length} scientist review{priorReviews.length === 1 ? "" : "s"}</strong> from similar experiments in this domain.</p>
+        </div>
+      )}
+
+      {!!feedbackSummary?.feedbackMatch && (
+        <div className="rounded-xl border border-border bg-card/50 p-4 text-sm space-y-1" data-print-hide>
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">Feedback retrieval</p>
+          <p className="text-muted-foreground">
+            Method: <span className="font-mono text-foreground">{feedbackSummary.feedbackMatch.method}</span>
+            {" · "}
+            Matched <strong>{feedbackSummary.feedbackMatch.similarReviewCount}</strong> similar review(s) by ontology + keywords.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Tags:{" "}
+            <span className="font-mono text-foreground">
+              {feedbackSummary.feedbackMatch.ontologyTags.join(", ") || "—"}
+            </span>
+          </p>
         </div>
       )}
 
@@ -124,6 +204,39 @@ export function PlanView({
             Completeness {qualityChecks.dimensions.completeness.toFixed(1)} · Evidence {qualityChecks.dimensions.evidenceGrounding.toFixed(1)} · Operational realism {qualityChecks.dimensions.operationalRealism.toFixed(1)}
           </p>
         </div>
+      )}
+
+      {!!scientificMechanistic && (
+        <details
+          className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm"
+          data-print-hide
+          data-testid="mechanistic-validation-panel"
+        >
+          <summary className="cursor-pointer font-medium text-foreground">Mechanistic validation (concentrations · power sketch · step evidence)</summary>
+          <div className="mt-3 space-y-3 text-muted-foreground">
+            <p className="text-xs leading-relaxed">{scientificMechanistic.disclaimer}</p>
+            <div>
+              <p className="text-xs font-semibold text-primary mb-1">Assay / concentration checks</p>
+              <ul className="list-disc pl-4 space-y-1">
+                {scientificMechanistic.assayCompatibility.map((a, i) => (
+                  <li key={i}>
+                    <span className="text-foreground/90">{a.assayClass}</span>: {a.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-primary mb-1">Power sketch (hypothesis-derived)</p>
+              <pre className="text-[11px] font-mono whitespace-pre-wrap bg-card/60 border border-border rounded-md p-2 overflow-x-auto">
+                {JSON.stringify(scientificMechanistic.powerSketch, null, 2)}
+              </pre>
+            </div>
+            <p className="text-xs">
+              Protocol steps annotated with evidence links:{" "}
+              <strong className="text-foreground">{scientificMechanistic.protocolEvidence.stepsAnnotated}</strong>
+            </p>
+          </div>
+        </details>
       )}
 
       {/* Mobile tabs (dropdown) */}
@@ -166,7 +279,9 @@ export function PlanView({
               {TABS.find((t) => t.id === tab)?.label}
             </p>
           </div>
-          {tab === "overview" && <OverviewTab plan={plan} hypothesis={hypothesis} />}
+          {tab === "overview" && (
+            <OverviewTab plan={plan} hypothesis={hypothesis} executionReadiness={executionReadiness} />
+          )}
           {tab === "protocol" && <ProtocolTab plan={plan} />}
           {tab === "materials" && <MaterialsTab plan={plan} />}
           {tab === "budget" && <BudgetTab plan={plan} />}
@@ -178,7 +293,10 @@ export function PlanView({
 
       {/* Print-only: render ALL sections sequentially */}
       <div data-print-only className="space-y-8 hidden">
-        <section data-print-section><h2>Overview</h2><OverviewTab plan={plan} hypothesis={hypothesis} /></section>
+        <section data-print-section>
+          <h2>Overview</h2>
+          <OverviewTab plan={plan} hypothesis={hypothesis} executionReadiness={executionReadiness} />
+        </section>
         <section data-print-section><h2>Protocol</h2><ProtocolTab plan={plan} /></section>
         <section data-print-section><h2>Materials</h2><MaterialsTab plan={plan} /></section>
         <section data-print-section><h2>Budget</h2><BudgetTab plan={plan} /></section>

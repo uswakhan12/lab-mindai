@@ -1,6 +1,6 @@
-import type { ExperimentPlan, FullPlan } from "@/types/plan";
+import type { ExecutionReadiness, ExperimentPlan, FullPlan } from "@/types/plan";
 import { Badge } from "@/components/ui/badge";
-import { Clock, DollarSign, Gauge, GraduationCap, Info } from "lucide-react";
+import { ClipboardCheck, Clock, DollarSign, Gauge, GraduationCap, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const difficultyTone: Record<ExperimentPlan["difficultyLevel"], string> = {
@@ -12,9 +12,10 @@ const difficultyTone: Record<ExperimentPlan["difficultyLevel"], string> = {
 interface Props {
   plan: FullPlan;
   hypothesis: string;
+  executionReadiness?: ExecutionReadiness;
 }
 
-export function OverviewTab({ plan, hypothesis }: Props) {
+export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
   const ep = plan.experimentPlan;
   const hasVerificationSources =
     !!plan.verificationSources &&
@@ -67,6 +68,32 @@ export function OverviewTab({ plan, hypothesis }: Props) {
           big
         />
       </div>
+
+      {!!executionReadiness && (
+        <div
+          className={cn(
+            "rounded-xl border p-4 flex flex-wrap items-center gap-4",
+            executionReadiness.tier === "order_ready" && "border-emerald-500/35 bg-emerald-500/[0.06]",
+            executionReadiness.tier === "pilot_ready" && "border-amber-500/35 bg-amber-500/[0.06]",
+            executionReadiness.tier === "draft" && "border-border bg-card/30",
+          )}
+          data-print-card
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-primary/15 p-2.5 text-primary">
+              <ClipboardCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">Procurement readiness</p>
+              <p className="text-xl font-semibold">
+                {executionReadiness.scoreOutOf10.toFixed(1)}
+                <span className="text-sm font-normal text-muted-foreground"> / 10</span>
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-foreground/85 flex-1 min-w-[200px] leading-relaxed">{executionReadiness.headline}</p>
+        </div>
+      )}
 
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="rounded-xl border border-border bg-card/40 p-5" data-print-card>

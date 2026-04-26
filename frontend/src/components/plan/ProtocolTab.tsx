@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FullPlan } from "@/types/plan";
-import { AlertTriangle, Info, Clock, Check } from "lucide-react";
+import { AlertTriangle, Info, Clock, Check, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VerificationSourcesBlock } from "./VerificationSourcesBlock";
 
@@ -80,6 +80,30 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
                         </span>
                       </div>
                       <p className="text-sm text-foreground/85 leading-relaxed mb-3">{step.description}</p>
+
+                      {step.evidenceLinks && step.evidenceLinks.length > 0 && (
+                        <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 mb-3 text-xs" data-print-hide>
+                          <p className="font-semibold text-primary mb-1.5 flex items-center gap-1">
+                            <Link2 className="h-3 w-3" />
+                            Evidence for this step
+                          </p>
+                          <ul className="space-y-1">
+                            {step.evidenceLinks.map((ev, ei) => (
+                              <li key={ei}>
+                                <a
+                                  href={ev.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline"
+                                >
+                                  {ev.title}
+                                </a>
+                                <span className="text-muted-foreground"> · {ev.source}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                       {step.criticalNotes.length > 0 && (
                         <div className="rounded-md border border-primary/30 bg-primary/5 p-3 mb-2 flex gap-2">

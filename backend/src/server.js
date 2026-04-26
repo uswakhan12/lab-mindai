@@ -1,7 +1,15 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { getRecentReviews, getReviewsByDomain, saveReviewRecord } from "./feedback-db.js";
+import {
+  initFeedbackStore,
+  findSimilarReviews,
+  getRecentReviews,
+  getReviewsByDomain,
+  saveReviewRecord,
+} from "./feedback-store.js";
+import { runScientificMechanisticValidation } from "./scientific-mechanistic.js";
+import { computeExecutionReadiness } from "./execution-readiness.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
@@ -39,11 +47,28 @@ function inferDomainFromHypothesis(hypothesis) {
   return "general_biomedical";
 }
 
-function mergedFeedback(clientFeedback, dbFeedback) {
-  const all = [...(Array.isArray(clientFeedback) ? clientFeedback : []), ...(Array.isArray(dbFeedback) ? dbFeedback : [])];
+function stripFeedbackForModel(item) {
+  if (!item || typeof item !== "object") return item;
+  const o = { ...item };
+  for (const k of Object.keys(o)) if (k.startsWith("__")) delete o[k];
+  return o;
+}
+
+function mergedFeedback(...lists) {
+  const all = lists.flatMap((l) => (Array.isArray(l) ? l : []));
+  all.sort((a, b) => {
+    const weight = (x) => {
+      const c = JSON.stringify(x?.corrections || {}).length + JSON.stringify(x?.issues || {}).length;
+      const rating = Number(x?.overallRating);
+      const low = Number.isFinite(rating) ? 5 - rating : 0;
+      return c * 10 + low;
+    };
+    return weight(b) - weight(a);
+  });
   const seen = new Set();
   const out = [];
-  for (const item of all) {
+  for (const raw of all) {
+    const item = stripFeedbackForModel(raw);
     const sig = JSON.stringify({
       domain: item?.domain,
       corrections: item?.corrections,
@@ -54,9 +79,31 @@ function mergedFeedback(clientFeedback, dbFeedback) {
     if (seen.has(sig)) continue;
     seen.add(sig);
     out.push(item);
-    if (out.length >= 12) break;
+    if (out.length >= 14) break;
   }
   return out;
+}
+
+function readTenantId(req) {
+  const t = String(req.headers["x-tenant-id"] || "").trim();
+  return t.length > 0 ? t.slice(0, 64) : "default";
+}
+
+function requireLabmindApiKey(req, res, next) {
+  if (process.env.NODE_ENV === "test") return next();
+  const required = process.env.LABMIND_API_KEY?.trim();
+  if (!required) return next();
+  const auth = req.headers.authorization;
+  const bearer = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  const key = bearer || String(req.headers["x-api-key"] || "").trim();
+  if (key !== required) {
+    return res.status(401).json({
+      error: "Unauthorized.",
+      hint: "Send Authorization: Bearer <LABMIND_API_KEY> or x-api-key header.",
+      requestId: res.locals.requestId,
+    });
+  }
+  next();
 }
 
 app.use(cors());
@@ -145,26 +192,80 @@ function hasMeaningfulReferences(references) {
   return Array.isArray(references) && references.some((r) => typeof r?.title === "string" && r.title.trim().length > 0);
 }
 
-async function tavilySearchRaw(apiKey, query) {
+function protocolRepositoryBonus(url) {
+  const u = String(url || "").toLowerCase();
+  if (u.includes("protocols.io")) return 0.11;
+  if (u.includes("bio-protocol")) return 0.09;
+  if (u.includes("nature.com") && u.includes("nprot")) return 0.09;
+  if (u.includes("jove.com")) return 0.06;
+  return 0;
+}
+
+function mergeTavilyResultRows(primary, secondary, limit = 6) {
+  const merged = new Map();
+  function ingest(rows, applyBonus) {
+    for (const r of rows || []) {
+      const url = String(r?.url || "").trim();
+      if (!url) continue;
+      const bonus = applyBonus ? protocolRepositoryBonus(url) : 0;
+      const rawScore = typeof r?.score === "number" && Number.isFinite(r.score) ? r.score : 0;
+      const adj = Math.min(0.99, rawScore + bonus);
+      const prev = merged.get(url);
+      if (!prev || adj > prev._adj) merged.set(url, { ...r, _adj: adj });
+    }
+  }
+  ingest(secondary, true);
+  ingest(primary, false);
+  return Array.from(merged.values())
+    .sort((a, b) => b._adj - a._adj)
+    .slice(0, limit)
+    .map(({ _adj, ...rest }) => ({
+      ...rest,
+      score: _adj,
+    }));
+}
+
+async function tavilySearchRaw(apiKey, query, opts = {}) {
   const q = clipQuery(query);
+  const max_results = opts.max_results ?? 4;
+  const search_depth = opts.search_depth ?? "basic";
+  const topic = opts.topic ?? "general";
+  const body = {
+    query: q,
+    topic,
+    search_depth,
+    max_results,
+    include_answer: false,
+    include_raw_content: false,
+  };
+  if (Array.isArray(opts.include_domains) && opts.include_domains.length > 0) {
+    body.include_domains = opts.include_domains.slice(0, 8);
+  }
   const resp = await fetch(TAVILY_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey.trim()}`,
     },
-    body: JSON.stringify({
-      query: q,
-      topic: "general",
-      search_depth: "basic",
-      max_results: 4,
-      include_answer: false,
-      include_raw_content: false,
-    }),
+    body: JSON.stringify(body),
   });
   if (!resp.ok) return [];
   const data = await resp.json();
   return Array.isArray(data?.results) ? data.results : [];
+}
+
+async function fetchMergedLiteratureRows(tavilyKey, hypothesis) {
+  const normalized = hypothesis.trim().replace(/\s+/g, " ");
+  const generalQ = buildTavilySearchQuery(hypothesis);
+  const protoSeed = clipQuery(`${normalized.slice(0, 240)} methods protocol reproducibility`, TAVILY_MAX_QUERY_LENGTH - 40);
+  const [generalRows, repoRows] = await Promise.all([
+    tavilySearchRaw(tavilyKey, generalQ, { max_results: 5 }),
+    tavilySearchRaw(tavilyKey, protoSeed, {
+      max_results: 4,
+      include_domains: ["protocols.io", "bio-protocol.org"],
+    }).catch(() => []),
+  ]);
+  return mergeTavilyResultRows(generalRows, repoRows, 6);
 }
 
 function mapResultsToSources(results, limit = 2) {
@@ -209,7 +310,7 @@ function buildVerificationQueries({ hypothesis, experimentTitle, domain, materia
   const hypoShort = String(hypothesis || "").trim().replace(/\s+/g, " ").slice(0, 140);
   const materialQuerySeed = matList.length > 0 ? matList : title;
   return {
-    protocol: `${title} ${dom} ${hypoShort} peer-reviewed laboratory protocol methods reproducibility`,
+    protocol: `${title} ${dom} ${hypoShort} protocols.io bio-protocol laboratory methods peer-reviewed reproducibility`,
     materials: `${materialQuerySeed} research reagent supplier catalog technical datasheet product page`,
     budget: `${title} ${dom} research lab budget reagent pricing equipment core facility operating cost estimate`,
     timeline: `${title} wet lab experiment phases timeline schedule dependencies project planning`,
@@ -424,7 +525,35 @@ async function chatGeminiWithFallback({ preferredModel, prompt }) {
   throw lastError || new Error("All Gemini fallback models failed.");
 }
 
+function formatPriorFeedbackForPrompt(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return "(none — first generation in this domain for this tenant.)";
+  }
+  const lines = [];
+  for (const f of items.slice(0, 12)) {
+    const corrections = f?.corrections && typeof f.corrections === "object" ? f.corrections : {};
+    const issues = f?.issues && typeof f.issues === "object" ? f.issues : {};
+    for (const section of ["protocol", "materials", "budget", "timeline", "validation"]) {
+      const cStr = typeof corrections[section] === "string" ? corrections[section].trim() : "";
+      const iStr = typeof issues[section] === "string" ? issues[section].trim() : "";
+      if (cStr || iStr) {
+        lines.push(
+          `- [${section}] issue: ${iStr.slice(0, 280) || "—"} | expert correction: ${cStr.slice(0, 520) || "—"}`,
+        );
+      }
+    }
+    if (lines.length === 0 && f?.overallRating != null) {
+      lines.push(`- [general] overall ${f.overallRating}/5 (${f.reviewerExpertise || "reviewer"})`);
+    }
+  }
+  if (lines.length === 0) {
+    return "(Reviews linked but no section text — use VERIFY-CATALOG for any uncertain SKU and conservative timelines.)";
+  }
+  return lines.join("\n");
+}
+
 function buildPlanPrompt({ hypothesis, retrievalPacket }) {
+  const priorBlock = formatPriorFeedbackForPrompt(retrievalPacket.priorFeedback || []);
   return `You are generating a complete, operational experiment plan for real wet-lab execution.
 Return ONLY valid JSON object matching this shape (no markdown):
 {
@@ -473,6 +602,12 @@ Constraints:
 - Timeline must have consistent start/end dependencies.
 - Keep references and verificationSources grounded in retrieval packet.
 - Include explicit safety and compliance notes (IRB/IBC/ethics approvals) whenever work could involve biosafety or human/animal subjects.
+- When describing methodology, bias toward established protocol literature (protocols.io, Bio-protocol, Nature Protocols, peer-reviewed methods, vendor protocols) already present in the retrieval packet — do not invent DOIs or URLs.
+
+=== PRIOR SCIENTIST CORRECTIONS (MANDATORY) ===
+The bullets below come from past expert reviews of similar experiments (same tenant / domain). You MUST fold them into the JSON plan: update protocol steps, materials lines, budget assumptions, timeline slack, or validation metrics where they override generic defaults. If a corrected catalog number is not verifiable from the packet, keep the expert intent in criticalNotes and set catalogNumber to "VERIFY-CATALOG".
+
+${priorBlock}
 
 Hypothesis:
 ${hypothesis}
@@ -595,8 +730,7 @@ async function buildLiteratureRetrievalPacket({ hypothesis, tavilyKey, llama8Mod
     };
   }
 
-  const query = buildTavilySearchQuery(hypothesis);
-  const rawResults = await tavilySearchRaw(tavilyKey, query);
+  const rawResults = await fetchMergedLiteratureRows(tavilyKey, hypothesis);
   const qcResult = mapTavilyToQC({ results: rawResults });
   const validatedQc = await validateLiteratureQcWithLlama({ hypothesis, qcResult, llama8Model });
   return {
@@ -766,20 +900,22 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, rateLimit: { windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX } });
 });
 
-app.get("/api/reviews", async (req, res) => {
+app.get("/api/reviews", requireLabmindApiKey, async (req, res) => {
   try {
+    const tenantId = readTenantId(req);
     const domain = typeof req.query.domain === "string" ? req.query.domain.trim() : "";
     const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
-    const reviews = domain ? await getReviewsByDomain(domain, limit) : await getRecentReviews(limit);
-    return res.json({ version: 1, requestId: res.locals.requestId, reviews });
+    const reviews = domain ? await getReviewsByDomain(tenantId, domain, limit) : await getRecentReviews(tenantId, limit);
+    return res.json({ version: 1, requestId: res.locals.requestId, tenantId, reviews });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected server error.";
     return res.status(500).json({ error: message, requestId: res.locals.requestId });
   }
 });
 
-app.post("/api/reviews", async (req, res) => {
+app.post("/api/reviews", requireLabmindApiKey, async (req, res) => {
   try {
+    const tenantId = readTenantId(req);
     const review = req.body || {};
     if (!review?.id || !review?.timestamp || !review?.hypothesis || !review?.domain) {
       return res.status(400).json({
@@ -787,15 +923,15 @@ app.post("/api/reviews", async (req, res) => {
         requestId: res.locals.requestId,
       });
     }
-    await saveReviewRecord(review);
-    return res.status(201).json({ ok: true, requestId: res.locals.requestId });
+    await saveReviewRecord(review, { tenantId });
+    return res.status(201).json({ ok: true, requestId: res.locals.requestId, tenantId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected server error.";
     return res.status(500).json({ error: message, requestId: res.locals.requestId });
   }
 });
 
-app.post("/api/literature-qc", async (req, res) => {
+app.post("/api/literature-qc", requireLabmindApiKey, async (req, res) => {
   try {
     const { hypothesis } = req.body || {};
     if (!hypothesis || typeof hypothesis !== "string" || hypothesis.trim().length < 6) {
@@ -807,44 +943,45 @@ app.post("/api/literature-qc", async (req, res) => {
       return res.status(500).json({ error: "Missing TAVILY_API_KEY in backend environment." });
     }
 
-    const query = buildTavilySearchQuery(hypothesis);
-
-    const tavilyResp = await fetch(TAVILY_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey.trim()}`,
-      },
-      body: JSON.stringify({
-        query,
-        topic: "general",
-        search_depth: "basic",
-        max_results: 5,
-        include_answer: false,
-        include_raw_content: false,
-      }),
-    });
-
-    if (!tavilyResp.ok) {
-      const errorText = await tavilyResp.text();
-      let tavilyMessage = errorText;
-      try {
-        const parsed = JSON.parse(errorText);
-        const detail = parsed?.detail;
-        if (typeof detail === "string") tavilyMessage = detail;
-        else if (detail?.error) tavilyMessage = detail.error;
-        else if (parsed?.message) tavilyMessage = parsed.message;
-      } catch {
-        // keep raw text
-      }
-      return res.status(502).json({
-        error: `Tavily request failed (${tavilyResp.status}).`,
-        details: tavilyMessage,
+    let mergedRows = await fetchMergedLiteratureRows(apiKey, hypothesis);
+    if (mergedRows.length === 0) {
+      const probe = await fetch(TAVILY_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey.trim()}`,
+        },
+        body: JSON.stringify({
+          query: buildTavilySearchQuery(hypothesis),
+          topic: "general",
+          search_depth: "basic",
+          max_results: 5,
+          include_answer: false,
+          include_raw_content: false,
+        }),
       });
+      if (!probe.ok) {
+        const errorText = await probe.text();
+        let tavilyMessage = errorText;
+        try {
+          const parsed = JSON.parse(errorText);
+          const detail = parsed?.detail;
+          if (typeof detail === "string") tavilyMessage = detail;
+          else if (detail?.error) tavilyMessage = detail.error;
+          else if (parsed?.message) tavilyMessage = parsed.message;
+        } catch {
+          // keep raw text
+        }
+        return res.status(502).json({
+          error: `Tavily request failed (${probe.status}).`,
+          details: tavilyMessage,
+        });
+      }
+      const fallback = await probe.json();
+      mergedRows = Array.isArray(fallback?.results) ? fallback.results : [];
     }
 
-    const tavilyData = await tavilyResp.json();
-    const qcResult = mapTavilyToQC(tavilyData);
+    const qcResult = mapTavilyToQC({ results: mergedRows });
 
     const llama8Model = process.env.LLAMA8_MODEL || "llama-3.1-8b-instant";
     const validatedQc = await validateLiteratureQcWithLlama({ hypothesis, qcResult, llama8Model });
@@ -859,7 +996,7 @@ app.post("/api/literature-qc", async (req, res) => {
  * Live web references per plan section (materials, budget, safety, etc.) for scientist verification.
  * Runs several bounded Tavily searches in parallel.
  */
-app.post("/api/plan-sources", async (req, res) => {
+app.post("/api/plan-sources", requireLabmindApiKey, async (req, res) => {
   try {
     const { hypothesis, experimentTitle, domain, materials } = req.body || {};
     if (!hypothesis || typeof hypothesis !== "string" || hypothesis.trim().length < 6) {
@@ -886,7 +1023,7 @@ app.post("/api/plan-sources", async (req, res) => {
   }
 });
 
-app.post("/api/experiment-plan", async (req, res) => {
+app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
   const started = Date.now();
   try {
     const { hypothesis, priorFeedback = [], domain: clientDomain } = req.body || {};
@@ -894,12 +1031,21 @@ app.post("/api/experiment-plan", async (req, res) => {
       return res.status(400).json({ error: "Hypothesis is required." });
     }
 
+    const tenantId = readTenantId(req);
+    await initFeedbackStore();
     const baseHypo = hypothesis.trim();
     const inferredDomain = clientDomain && String(clientDomain).trim().length > 0
       ? String(clientDomain).trim()
       : inferDomainFromHypothesis(baseHypo);
-    const dbPriorFeedback = await getReviewsByDomain(inferredDomain, 8);
-    const allPriorFeedback = mergedFeedback(priorFeedback, dbPriorFeedback);
+    const similarPack = await findSimilarReviews({
+      tenantId,
+      hypothesis: baseHypo,
+      domain: inferredDomain,
+      limit: 10,
+      candidatePool: 160,
+    });
+    const domainReviews = await getReviewsByDomain(tenantId, inferredDomain, 8);
+    const allPriorFeedback = mergedFeedback(priorFeedback, similarPack.reviews, domainReviews);
     const tavilyKey = process.env.TAVILY_API_KEY;
     const llama8Model = process.env.LLAMA8_MODEL || "llama-3.1-8b-instant";
     const rawLlama70 = process.env.LLAMA70_MODEL || "llama-3.3-70b-versatile";
@@ -970,6 +1116,11 @@ app.post("/api/experiment-plan", async (req, res) => {
       plan.literatureQC = retrievalPacket.literatureQC;
     }
 
+    const scientificMechanistic = runScientificMechanisticValidation({
+      hypothesis: baseHypo,
+      plan,
+    });
+
     const safetyCheck = runSafetyChecks({ hypothesis: baseHypo, plan });
     if (!safetyCheck.ok) {
       return res.status(422).json({
@@ -978,25 +1129,55 @@ app.post("/api/experiment-plan", async (req, res) => {
         requestId: res.locals.requestId,
       });
     }
-    const qualityChecks = evaluatePlanQuality({ hypothesis: baseHypo, plan });
+    let qualityChecks = evaluatePlanQuality({ hypothesis: baseHypo, plan });
+    for (const ac of scientificMechanistic.assayCompatibility || []) {
+      if (ac.passesHeuristic === false) {
+        qualityChecks = {
+          ...qualityChecks,
+          warnings: [...qualityChecks.warnings, ac.detail],
+        };
+      }
+    }
+    if (scientificMechanistic.powerSketch?.reportedMeetsHeuristic === false && scientificMechanistic.powerSketch?.note) {
+      qualityChecks = {
+        ...qualityChecks,
+        warnings: [...qualityChecks.warnings, scientificMechanistic.powerSketch.note],
+      };
+    }
 
     return res.json({
       version: 1,
       requestId: res.locals.requestId,
+      tenantId,
       modelFlow: {
         retrievalModel: `${retrievalPacket.modelFlow?.retrieval || "tavily"} + source-check:${llama8Model}`,
         planningModel,
       },
       feedbackSummary: {
         priorFeedbackCount: Array.isArray(allPriorFeedback) ? allPriorFeedback.length : 0,
+        feedbackMatch: {
+          method: similarPack.matchMethod,
+          ontologyTags: similarPack.ontologyTags,
+          similarReviewCount: similarPack.reviews.length,
+        },
         appliedHighlights: Array.isArray(allPriorFeedback)
           ? allPriorFeedback
-              .flatMap((f) => Object.values(f?.corrections || {}))
+              .flatMap((f) => [
+                ...Object.values(f?.corrections || {}),
+                ...Object.values(f?.issues || {}),
+              ])
               .filter((c) => typeof c === "string" && c.trim().length > 0)
-              .slice(0, 3)
+              .slice(0, 8)
           : [],
       },
       qualityChecks,
+      executionReadiness: computeExecutionReadiness({
+        hypothesis: baseHypo,
+        plan,
+        qualityChecks,
+        scientificMechanistic,
+      }),
+      scientificMechanistic,
       metadata: {
         generatedAt: new Date().toISOString(),
         generationLatencyMs: Date.now() - started,
@@ -1011,7 +1192,15 @@ app.post("/api/experiment-plan", async (req, res) => {
 
 const isDirectRun = process.argv[1] && process.argv[1].endsWith("server.js");
 if (isDirectRun) {
-  app.listen(PORT, () => {
+  app.listen(PORT, async () => {
+    try {
+      const store = await initFeedbackStore();
+      // eslint-disable-next-line no-console
+      console.log(JSON.stringify({ msg: "feedback_store_ready", mode: store.mode }));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("feedback_store_init_failed", e instanceof Error ? e.message : String(e));
+    }
     // eslint-disable-next-line no-console
     console.log(`Backend running at http://localhost:${PORT}`);
   });

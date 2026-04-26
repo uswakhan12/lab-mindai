@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { initFeedbackStore } from "../src/feedback-store.js";
 import { app } from "../src/server.js";
 
 let server;
 let baseUrl = "";
 
 test.before(async () => {
+  await initFeedbackStore();
   server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
   const addr = server.address();
@@ -72,4 +74,37 @@ test("POST /api/reviews and GET /api/reviews roundtrip", async () => {
   const payload = await list.json();
   assert.ok(Array.isArray(payload.reviews));
   assert.ok(payload.reviews.some((r) => r.id === review.id));
+});
+
+test("tenant isolation for reviews", async () => {
+  const idA = `tenant-a-${Date.now()}`;
+  const idB = `tenant-b-${Date.now()}`;
+  const base = {
+    timestamp: new Date().toISOString(),
+    hypothesis: "HeLa cryopreservation with trehalose.",
+    domain: "cell_biology",
+    reviewerExpertise: "PI",
+    overallRating: 4,
+    issues: { protocol: "", materials: "", budget: "", timeline: "", validation: "" },
+    corrections: { protocol: "", materials: "", budget: "", timeline: "", validation: "" },
+  };
+  const resA = await fetch(`${baseUrl}/api/reviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-tenant-id": "org-alpha" },
+    body: JSON.stringify({ ...base, id: idA }),
+  });
+  assert.equal(resA.status, 201);
+  const resB = await fetch(`${baseUrl}/api/reviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-tenant-id": "org-beta" },
+    body: JSON.stringify({ ...base, id: idB, hypothesis: "Different hypothesis for beta." }),
+  });
+  assert.equal(resB.status, 201);
+
+  const listA = await fetch(`${baseUrl}/api/reviews?domain=cell_biology&limit=20`, {
+    headers: { "x-tenant-id": "org-alpha" },
+  });
+  const bodyA = await listA.json();
+  assert.ok(bodyA.reviews.some((r) => r.id === idA));
+  assert.ok(!bodyA.reviews.some((r) => r.id === idB));
 });

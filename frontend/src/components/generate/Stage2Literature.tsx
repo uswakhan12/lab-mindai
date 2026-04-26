@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, ExternalLink, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { labmindApiHeaders } from "@/lib/storage";
 
 interface Props {
   hypothesis: string;
@@ -60,7 +61,7 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
       try {
         const response = await fetch(`${BACKEND_URL}/api/literature-qc`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: labmindApiHeaders(),
           body: JSON.stringify({ hypothesis }),
         });
         const data = (await response.json()) as QCResponse & { error?: string; details?: string };
@@ -194,6 +195,7 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
           onClick={onComplete}
           size="lg"
           className="bg-primary-gradient hover:opacity-95 shadow-glow h-12 px-6 rounded-xl group"
+          data-testid="stage2-generate-plan"
         >
           Generate Full Experiment Plan
           <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />

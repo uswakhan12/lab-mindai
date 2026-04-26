@@ -120,6 +120,7 @@ export function Stage1Hypothesis({ hypothesis, onComplete }: Props) {
           onClick={onComplete}
           size="lg"
           className="bg-primary-gradient hover:opacity-95 shadow-glow h-12 px-6 rounded-xl group"
+          data-testid="stage1-run-lit-qc"
         >
           Run Literature QC
           <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />

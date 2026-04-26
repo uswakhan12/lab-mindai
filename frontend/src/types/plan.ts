@@ -47,6 +47,16 @@ export interface LiteratureQC {
   references: Reference[];
 }
 
+/** Per-step link to literature QC or verification URLs (claim-level grounding). */
+export interface StepEvidenceLink {
+  index?: number;
+  title: string;
+  url: string;
+  source: string;
+  snippet?: string;
+  validationStatus?: string;
+}
+
 export interface ProtocolStep {
   stepNumber: number;
   title: string;
@@ -54,6 +64,7 @@ export interface ProtocolStep {
   durationHours: number;
   safetyWarnings: string[];
   criticalNotes: string[];
+  evidenceLinks?: StepEvidenceLink[];
 }
 
 export interface ProtocolPhase {
@@ -150,4 +161,36 @@ export interface QualityChecks {
   >;
   warnings: string[];
   errors: string[];
+}
+
+/** Deterministic “Monday procurement” style readiness from backend contract checks. */
+export interface ExecutionReadiness {
+  version: number;
+  scoreOutOf10: number;
+  tier: "order_ready" | "pilot_ready" | "draft";
+  headline: string;
+  checklist: { id: string; ok: boolean; detail: string }[];
+  summary: {
+    passedChecks: number;
+    totalChecks: number;
+    protocolSteps: number;
+    materialLines: number;
+    validatedSourceSections: number;
+  };
+}
+
+/** Backend mechanistic validation (concentration vs assay heuristics, power sketch, step evidence). */
+export interface ScientificMechanistic {
+  version: number;
+  disclaimer: string;
+  concentrations: { value: number; unit: string; raw: string }[];
+  assayCompatibility: {
+    claim: string;
+    assayClass: string;
+    benchmark?: { min?: number; max?: number; note?: string };
+    passesHeuristic: boolean | null;
+    detail: string;
+  }[];
+  powerSketch: Record<string, unknown>;
+  protocolEvidence: { stepsAnnotated: number };
 }
