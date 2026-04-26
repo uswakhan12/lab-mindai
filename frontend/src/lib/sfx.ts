@@ -1,5 +1,8 @@
 const SFX_KEY = "labmind:sfx";
 
+/** Peak gain for the click (linear 0–1). Previously ~0.05 was inaudible on many systems. */
+const SFX_PEAK_GAIN = 0.32;
+
 export type SfxMode = "on" | "off";
 
 let audioCtx: AudioContext | null = null;
@@ -28,20 +31,27 @@ export function playButtonSfx(): void {
   if (getStoredSfx() === "off") return;
   const ctx = getAudioContext();
   if (!ctx) return;
+  if (ctx.state === "suspended") {
+    void ctx.resume();
+  }
   const now = ctx.currentTime;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
 
   osc.type = "triangle";
-  osc.frequency.setValueAtTime(660, now);
-  osc.frequency.exponentialRampToValueAtTime(880, now + 0.05);
+  osc.frequency.setValueAtTime(720, now);
+  osc.frequency.exponentialRampToValueAtTime(960, now + 0.055);
 
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.05, now + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+  const peak = SFX_PEAK_GAIN;
+  const attackEnd = now + 0.014;
+  const releaseEnd = now + 0.14;
+  /* Start above zero to avoid unstable exponential ramp from true zero. */
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.exponentialRampToValueAtTime(peak, attackEnd);
+  gain.gain.exponentialRampToValueAtTime(0.001, releaseEnd);
 
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start(now);
-  osc.stop(now + 0.1);
+  osc.stop(releaseEnd + 0.02);
 }

@@ -595,6 +595,94 @@ async function chatGeminiWithFallback({ preferredModel, prompt }) {
   throw lastError || new Error("All Gemini fallback models failed.");
 }
 
+function inferGapPhaseName(hypothesis, startDay, endDay) {
+  const len = Math.max(0, endDay - startDay + 1);
+  const h = String(hypothesis || "").toLowerCase();
+  if (/cryo|ln2|liquid nitrogen|freez|vitrif|vial|vapor|−80|−196|nitrogen|dry ice|-80|nitrogen/.test(h)) {
+    return `Cryogenic / long-term storage (vapor–liquid N₂, −80°C, or quiescent hold; ${len}d)`;
+  }
+  if (/incubat|passage|subcultur|expansion|culture|confluen|grow|monolayer/.test(h)) {
+    return `Cell expansion / culture (scheduled passes; ${len}d)`;
+  }
+  if (/mof|synth|reaction|stir|reflux|overnight|column|chromato/.test(h)) {
+    return `Process hold / work-up / instrument queue (${len}d)`;
+  }
+  return `Interphase: active storage, incubation, reagent lead time, or equipment scheduling (${len}d)`;
+}
+
+/**
+ * If the model leaves calendar gaps between phases, insert a real "storage" phase
+ * (cryo, incubation, etc.) so scientists are not left wondering what to do.
+ */
+function fillTimelineGaps(hypothesis, plan) {
+  const ep = plan?.experimentPlan;
+  if (!ep || !Array.isArray(ep.timeline?.phases) || ep.timeline.phases.length < 1) return;
+
+  const raw = ep.timeline.phases
+    .filter((p) => p && Number.isFinite(p.startDay) && Number.isFinite(p.endDay))
+    .map((p) => ({
+      name: String(p.name || "Phase").trim() || "Phase",
+      startDay: Math.round(p.startDay),
+      endDay: Math.round(p.endDay),
+      type: p.type,
+      dependencies: Array.isArray(p.dependencies) ? p.dependencies : [],
+    }));
+  if (raw.length === 0) return;
+  raw.sort((a, b) => a.startDay - b.startDay);
+
+  const out = [];
+  for (let i = 0; i < raw.length; i += 1) {
+    if (i > 0) {
+      const prev = out[out.length - 1];
+      const cur = raw[i];
+      if (cur.startDay > prev.endDay + 1) {
+        const gapStart = prev.endDay + 1;
+        const gapEnd = cur.startDay - 1;
+        if (gapEnd >= gapStart) {
+          out.push({
+            name: inferGapPhaseName(hypothesis, gapStart, gapEnd),
+            startDay: gapStart,
+            endDay: gapEnd,
+            type: "storage",
+            dependencies: [prev.name],
+          });
+        }
+      }
+    }
+    out.push(raw[i]);
+  }
+  if (out.length && out[0].startDay > 1) {
+    const fs = out[0].startDay;
+    out.unshift({
+      name: inferGapPhaseName(hypothesis, 1, fs - 1),
+      startDay: 1,
+      endDay: fs - 1,
+      type: "storage",
+      dependencies: [],
+    });
+  }
+  const T = ep.totalDurationDays;
+  if (out.length && Number.isFinite(T) && T > 0) {
+    const last = out[out.length - 1];
+    if (last.endDay < T) {
+      const gapStart = last.endDay + 1;
+      out.push({
+        name: inferGapPhaseName(hypothesis, gapStart, T),
+        startDay: gapStart,
+        endDay: T,
+        type: "storage",
+        dependencies: [last.name],
+      });
+    }
+  }
+  out.sort((a, b) => a.startDay - b.startDay);
+  ep.timeline.phases = out;
+  const maxEnd = Math.max(...out.map((p) => p.endDay), ep.totalDurationDays || 0);
+  if (Number.isFinite(maxEnd)) {
+    ep.totalDurationDays = Math.max(ep.totalDurationDays || 0, maxEnd);
+  }
+}
+
 function formatPriorFeedbackForPrompt(items) {
   if (!Array.isArray(items) || items.length === 0) {
     return "(none — first generation in this domain for this tenant.)";
@@ -677,7 +765,7 @@ Return ONLY valid JSON object matching this shape (no markdown):
     "protocol":{"phases":[{"phaseName":"string","steps":[{"stepNumber":1,"title":"string","description":"string","durationHours":1,"safetyWarnings":["string"],"criticalNotes":["string"],"literatureRefIndex":0}]}]},
     "materials":[{"item":"string","specification":"string","quantity":"string","supplier":"string","catalogNumber":"string","unitPriceUSD":0,"totalCostUSD":0,"category":"Reagent|Equipment|Consumable","leadTimeWeeks":0,"lastVerifiedAt":"ISO-8601 when price/availability was checked","quoteSourceType":"literature_packet|vendor_page|verification_tavily|model_estimate|unknown","stalenessDays":0,"grounding":{"sourceUrl":"EXACT url from retrieval references OR verification materials URLs OR PENDING","sourceTitle":"string","evidenceNote":"<=140 chars","confidence":"High|Medium|Low"}}],
     "budget":{"byCategory":[{"category":"string","amountUSD":0}],"contingencyPercent":10,"totalWithContingencyUSD":0},
-    "timeline":{"phases":[{"name":"string","startDay":0,"endDay":0,"type":"preparation|treatment|analysis|measurement","dependencies":["string"]}]},
+    "timeline":{"phases":[{"name":"string","startDay":0,"endDay":0,"type":"preparation|treatment|analysis|measurement|storage","dependencies":["string"]}]},
     "validation":{"successMetrics":["string"],"statisticalPlan":"string","sampleSize":"string","controls":{"positive":"string","negative":"string"},"failureModes":[{"mode":"string","earlyDetection":"string"}],"qcCheckpoints":["string"]},
     "safety":{"hazardousMaterials":[{"material":"string","hazards":["string"],"ghsSymbols":["string"]}],"requiredPPE":["string"],"wasteDisposal":["string"],"emergencyProcedures":["string"]}
   },
@@ -701,7 +789,8 @@ Constraints:
 - experimentPlan.totalDurationDays MUST match the last timeline phase endDay within **3 days** (align header to max endDay).
 - Include specific materials and plausible catalog identifiers when known; otherwise mark as "VERIFY-CATALOG".
 - Budget should add up coherently.
-- Timeline must have consistent start/end dependencies.
+- **Timeline: use inclusive integer day indices from 1..totalDurationDays. Do not leave gaps** — every day must be assigned. Passive periods (e.g. vials in LN₂, −80°C hold, long incubation, reagent lead time) MUST appear as their own named phase, usually with "type": "storage" or "treatment", not as missing days.
+- Timeline phase dependencies should follow execution order.
 - Keep references and verificationSources grounded in retrieval packet.
 - Include explicit safety and compliance notes (IRB/IBC/ethics approvals) whenever work could involve biosafety or human/animal subjects.
 - When describing methodology, bias toward established protocol literature (protocols.io, Bio-protocol, Nature Protocols, peer-reviewed methods, vendor protocols) already present in the retrieval packet — do not invent DOIs or URLs.
@@ -1431,6 +1520,11 @@ app.post("/api/experiment-plan", requireLabmindApiKey, async (req, res) => {
       plan = buildMinimalFallbackPlan(baseHypo, retrievalPacket);
       planningModel = `${planningModel}+stub:json-fallback`;
       if (!releaseDegraded.stubReason) releaseDegraded.stubReason = "json_parse";
+    }
+    try {
+      fillTimelineGaps(baseHypo, plan);
+    } catch (e) {
+      // non-fatal; return plan as model produced
     }
 
     const modelMaterials = Array.isArray(plan?.experimentPlan?.materials) ? plan.experimentPlan.materials : [];

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUpDown, Download, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { MATERIAL_CATEGORY_BADGE } from "@/lib/planAccents";
 
 type SortKey = keyof Material | "none";
 
@@ -89,7 +91,7 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
       <VerificationSourcesBlock plan={plan} section="materials" />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-amber-200/90 light:text-amber-900">
             {materials.length} line items across reagents, equipment, and consumables.
           </p>
         </div>
@@ -102,12 +104,17 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
       <div
         className="rounded-xl border border-border bg-card/40 backdrop-blur overflow-hidden"
         data-print-card
+        data-print-materials-card
       >
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" data-print-materials-scroll>
           <table
-            className={`w-full text-sm ${hasGrounding || hasQuoteMeta ? "min-w-[1040px]" : "min-w-[760px]"}`}
+            className={cn(
+              "w-full text-sm",
+              hasGrounding || hasQuoteMeta ? "min-w-[1040px]" : "min-w-[760px]",
+            )}
+            data-print-materials-table
           >
-            <thead className="bg-card border-b border-border text-xs uppercase tracking-widest text-muted-foreground">
+            <thead className="bg-card border-b border-amber-500/30 text-xs uppercase tracking-widest text-amber-200/85 light:text-amber-900/80">
               <tr>
                 <Th label="Item" onClick={() => onSort("item")} />
                 <Th label="Specification" />
@@ -124,13 +131,17 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
             <tbody className="divide-y divide-border">
               {sorted.map((m, i) => {
                 const longLead = m.leadTimeWeeks > 1;
+                const catIdx = m.category === "Reagent" ? 0 : m.category === "Equipment" ? 1 : 2;
                 return (
                   <tr key={i} className="hover:bg-card/60 transition-colors">
                     <td className="px-3 py-3 align-top">
                       <p className="font-medium text-foreground">{m.item}</p>
                       <Badge
                         variant="outline"
-                        className="mt-1 text-[10px] uppercase tracking-wider border-border bg-card/50"
+                        className={cn(
+                          "mt-1 text-[10px] uppercase tracking-wider",
+                          MATERIAL_CATEGORY_BADGE[catIdx],
+                        )}
                       >
                         {m.category}
                       </Badge>
@@ -141,11 +152,9 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
                     <td className="px-3 py-3 align-top whitespace-nowrap">{m.quantity}</td>
                     <td className="px-3 py-3 align-top text-muted-foreground">{m.supplier}</td>
                     <td className="px-3 py-3 align-top">
-                      <span className="font-mono text-xs text-foreground/90">
-                        {m.catalogNumber}
-                      </span>
+                      <span className="font-mono text-xs text-foreground/90">{m.catalogNumber}</span>
                       <span
-                        className="block text-[10px] text-amber-400/80 mt-0.5"
+                        className="block text-[10px] mt-0.5 text-amber-300/90 light:text-amber-950/90 dark:text-amber-400/85"
                         title="Verify current catalog and pricing before ordering"
                       >
                         ⚠ Verify before ordering
@@ -211,7 +220,7 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
                       <span
                         className={
                           longLead
-                            ? "inline-flex items-center gap-1 text-amber-400 font-mono text-xs"
+                            ? "inline-flex items-center gap-1 font-mono text-xs text-amber-300 light:text-amber-900 dark:text-amber-400"
                             : "text-muted-foreground font-mono text-xs"
                         }
                       >
@@ -228,10 +237,10 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
       </div>
 
       <div className="grid sm:grid-cols-4 gap-3">
-        <SubCard label="Reagents" value={subtotals.Reagent} />
-        <SubCard label="Equipment" value={subtotals.Equipment} />
-        <SubCard label="Consumables" value={subtotals.Consumable} />
-        <SubCard label="Total" value={total} highlight />
+        <SubCard label="Reagents" value={subtotals.Reagent} tone="teal" />
+        <SubCard label="Equipment" value={subtotals.Equipment} tone="violet" />
+        <SubCard label="Consumables" value={subtotals.Consumable} tone="amber" />
+        <SubCard label="Total" value={total} tone="total" />
       </div>
     </div>
   );
@@ -249,13 +258,17 @@ function Th({
   return (
     <th className={`px-3 py-2.5 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
       {onClick ? (
-        <button
-          onClick={onClick}
-          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-        >
-          {label}
-          <ArrowUpDown className="h-3 w-3" />
-        </button>
+        <>
+          <span className="hidden font-medium print:!inline">{label}</span>
+          <button
+            type="button"
+            onClick={onClick}
+            className="inline-flex items-center gap-1 hover:text-foreground transition-colors print:hidden"
+          >
+            {label}
+            <ArrowUpDown className="h-3 w-3" />
+          </button>
+        </>
       ) : (
         label
       )}
@@ -263,26 +276,43 @@ function Th({
   );
 }
 
+const subCardTones: Record<"teal" | "violet" | "amber" | "total", { wrap: string; kicker: string; value: string }> = {
+  teal: {
+    wrap: "border-lab-teal/30 bg-lab-teal/5",
+    kicker: "text-lab-teal light:text-teal-800",
+    value: "text-xl text-teal-200 light:text-teal-800",
+  },
+  violet: {
+    wrap: "border-violet-500/30 bg-violet-500/5",
+    kicker: "text-violet-300 light:text-violet-800",
+    value: "text-xl text-violet-200 light:text-violet-800",
+  },
+  amber: {
+    wrap: "border-amber-500/30 bg-amber-500/5",
+    kicker: "text-amber-200 light:text-amber-800",
+    value: "text-xl text-amber-200 light:text-amber-800",
+  },
+  total: {
+    wrap: "border-lab-violet/35 bg-gradient-to-br from-lab-violet/12 to-primary/5",
+    kicker: "text-lab-violet light:text-violet-800",
+    value: "text-2xl text-gradient",
+  },
+};
+
 function SubCard({
   label,
   value,
-  highlight = false,
+  tone = "teal",
 }: {
   label: string;
   value: number;
-  highlight?: boolean;
+  tone?: "teal" | "violet" | "amber" | "total";
 }) {
+  const t = tone === "total" ? subCardTones.total : subCardTones[tone];
   return (
-    <div
-      className={`rounded-lg border p-4 ${highlight ? "border-primary/40 bg-primary/5" : "border-border bg-card/40"}`}
-      data-print-card
-    >
-      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
-      <p
-        className={`font-display font-semibold ${highlight ? "text-2xl text-gradient" : "text-xl"}`}
-      >
-        ${value.toLocaleString()}
-      </p>
+    <div className={cn("rounded-lg border p-4", t.wrap)} data-print-card>
+      <p className={cn("text-xs uppercase tracking-widest mb-1", t.kicker)}>{label}</p>
+      <p className={cn("font-display font-semibold", t.value)}>${value.toLocaleString()}</p>
     </div>
   );
 }

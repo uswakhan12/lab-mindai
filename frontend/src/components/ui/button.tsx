@@ -15,7 +15,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, onClick, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     const handleClick: React.MouseEventHandler<HTMLButtonElement> = (e) => {
-      if (!props.disabled && !e.defaultPrevented && props["data-sfx"] !== "off") {
+      if (!props.disabled && !e.defaultPrevented && (props as { "data-sfx"?: string })["data-sfx"] !== "off") {
         playButtonSfx();
       }
       onClick?.(e);
@@ -32,4 +32,4 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
-export { Button };
+export { Button, buttonVariants };

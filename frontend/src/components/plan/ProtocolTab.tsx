@@ -26,7 +26,7 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
         className="rounded-xl border border-border bg-card/40 p-4 flex items-center justify-between flex-wrap gap-3"
         data-print-hide
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-lab-teal light:text-teal-800">
           {completedCount} of {allSteps.length} steps complete
         </p>
         <div className="flex-1 min-w-[180px] max-w-md h-1.5 rounded-full bg-muted overflow-hidden">
@@ -40,7 +40,7 @@ export function ProtocolTab({ plan }: { plan: FullPlan }) {
       {plan.experimentPlan.protocol.phases.map((phase, pi) => (
         <section key={phase.phaseName} className="space-y-4 avoid-break">
           <div className="flex items-baseline gap-3">
-            <span className="text-xs font-mono text-primary uppercase tracking-widest">
+            <span className="text-xs font-mono text-lab-teal light:text-teal-800 uppercase tracking-widest">
               Phase {pi + 1}
             </span>
             <h3 className="text-xl font-semibold">

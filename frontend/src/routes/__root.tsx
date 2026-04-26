@@ -1,5 +1,6 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
+import { GeneratePipelineRunner } from "@/components/generate/GeneratePipelineRunner";
 
 import appCss from "../styles.css?url";
 
@@ -61,7 +62,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
               (function () {
                 try {
                   var t = localStorage.getItem("labmind:theme");
-                  if (t === "light") document.documentElement.classList.add("light");
+                  if (t === "light") {
+                    document.documentElement.classList.add("light");
+                    document.documentElement.classList.remove("dark");
+                  } else {
+                    document.documentElement.classList.add("dark");
+                    document.documentElement.classList.remove("light");
+                  }
                 } catch (e) {}
               })();
             `,
@@ -80,6 +87,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <>
+      <GeneratePipelineRunner />
       <Outlet />
       <Toaster richColors position="top-center" theme="dark" />
     </>

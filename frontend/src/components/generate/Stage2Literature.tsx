@@ -1,152 +1,122 @@
-import { useEffect, useState } from "react";
-import { ArrowRight, BookOpen, ExternalLink, Library } from "lucide-react";
+import { BookOpen, ExternalLink, Loader2 } from "lucide-react";
+import { useGenerateStore } from "@/lib/generateStore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { labmindApiHeaders } from "@/lib/storage";
-import type { NoveltyDiagnostics } from "@/types/plan";
+import type { LiteratureQCResult } from "@/lib/generateTypes";
 
-interface Props {
-  hypothesis: string;
-  onComplete: () => void;
-}
-
-interface Reference {
-  title: string;
-  authors: string;
-  journal: string;
-  year: number;
-  doi: string;
-  relevance: string;
-  url?: string;
-  validationStatus?: "validated" | "weak_match";
-  confidence?: number;
-}
-
-interface QCResponse {
-  noveltySignal: "not_found" | "similar_exists" | "exact_match";
-  noveltyExplanation: string;
-  references: Reference[];
-  modelFlow?: { retrieval?: string; validator?: string };
-  noveltyDiagnostics?: NoveltyDiagnostics;
-}
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
-
-function noveltyBadge(signal: QCResponse["noveltySignal"]) {
-  if (signal === "exact_match") return "🔴 Exact Match Found";
-  if (signal === "similar_exists") return "🟡 Similar Work Exists";
-  return "🟢 Not Found";
+function noveltyBadge(signal: LiteratureQCResult["noveltySignal"]) {
+  switch (signal) {
+    case "not_found":
+      return "Not found in literature (good)";
+    case "similar_exists":
+      return "Very similar (review closely)";
+    case "exact_match":
+    default:
+      return "Exact/strong prior match (high risk of duplication)";
+  }
 }
 
 function evidenceTierLabel(tier: string) {
-  const labels: Record<string, string> = {
-    exact_or_near_protocol: "Exact / near-protocol candidate",
-    close_analog: "Close analog",
-    related_work: "Related work",
-    weakly_related: "Weakly related",
-    sparse: "Sparse retrieval",
-  };
-  return labels[tier] || tier.replace(/_/g, " ");
+  switch (tier) {
+    case "A":
+      return "A · Strong, multi-cue overlap";
+    case "B":
+      return "B · Moderate, explainable";
+    case "C":
+      return "C · Indirect, weak, or unverifiable";
+    case "C?":
+    default:
+      return `${tier} · Heuristic`;
+  }
 }
 
-function hostKindLabel(k: string) {
-  const labels: Record<string, string> = {
-    protocol_repository: "Protocol repo",
-    peer_literature: "Literature",
-    vendor_or_resource: "Vendor / resource",
-    community_protocol: "Community protocol",
-    general_web: "Web",
-  };
-  return labels[k] || k;
+function hostKindLabel(kind: string) {
+  switch (kind) {
+    case "protocol_repo":
+      return "Protocol / methods repository";
+    case "vendor":
+      return "Vendor / reagent / kit";
+    case "resource":
+      return "Resource / database";
+    case "academic":
+      return "Academic paper / preprint";
+    case "unknown":
+    default:
+      return "Unclassified / unknown";
+  }
 }
 
-export function Stage2Literature({ hypothesis, onComplete }: Props) {
-  const [progress, setProgress] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [result, setResult] = useState<QCResponse | null>(null);
+interface Props {
+  onComplete: () => void;
+  /** When true, literature / plan work is stopped — user is editing the hypothesis. */
+  suspended?: boolean;
+}
 
-  useEffect(() => {
-    setLoading(true);
-    setError("");
-    setResult(null);
-    setProgress(0);
+export function Stage2Literature({ onComplete, suspended = false }: Props) {
+  const sessionKey = useGenerateStore((s) => s.sessionKey);
+  const s2Loading = useGenerateStore((s) => s.s2Loading);
+  const s2Error = useGenerateStore((s) => s.s2Error);
+  const s2Progress = useGenerateStore((s) => s.s2Progress);
+  const s2Result = useGenerateStore((s) => s.s2Result);
+  const s3PipelinePhase = useGenerateStore((s) => s.s3PipelinePhase);
+  const bumpS2Rerun = useGenerateStore((s) => s.bumpS2Rerun);
 
-    const start = Date.now();
-    const duration = 5000;
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const pct = Math.min(92, (elapsed / duration) * 100);
-      setProgress(pct);
-    }, 50);
+  const s3Loading = s3PipelinePhase === "loading";
+  const result = s2Result;
 
-    const fetchQC = async () => {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/literature-qc`, {
-          method: "POST",
-          headers: labmindApiHeaders(),
-          body: JSON.stringify({ hypothesis }),
-        });
-        const data = (await response.json()) as QCResponse & { error?: string; details?: string };
-        if (!response.ok) {
-          const parts = [data.error, data.details].filter(Boolean);
-          throw new Error(parts.join(" — ") || "Failed to fetch literature QC.");
-        }
-        setResult(data);
-        setProgress(100);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unexpected error";
-        setError(message);
-      } finally {
-        clearInterval(interval);
-        setLoading(false);
-      }
-    };
-
-    fetchQC();
-    return () => clearInterval(interval);
-  }, [hypothesis]);
-
-  if (loading) {
+  if (suspended) {
     return (
-      <div className="rounded-2xl border border-border bg-card/50 backdrop-blur p-10 animate-fade-in">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
-            <Library className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <p className="font-medium">Searching literature using backend Tavily service...</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Matching protocols · ranking relevance · preparing novelty signal
-            </p>
-          </div>
-        </div>
-        <Progress value={progress} className="h-1.5" />
-        <div className="flex justify-between mt-3 text-xs text-muted-foreground font-mono">
-          <span>{Math.round(progress)}%</span>
-          <span>{Math.round((progress / 100) * 5)} / 5 results scanned</span>
-        </div>
+      <div className="rounded-2xl border border-border/80 bg-card/50 backdrop-blur p-8 text-center animate-fade-in">
+        <p className="text-sm text-muted-foreground">
+          Hypothesis is open for editing. Generation is paused.
+        </p>
+        <p className="text-sm text-foreground/90 mt-2">
+          Save to apply the text and restart this step, or cancel to continue.
+        </p>
       </div>
     );
   }
 
-  if (error) {
+  if (s2Error && !result) {
     return (
-      <div className="rounded-2xl border border-destructive/40 bg-card/60 backdrop-blur p-6 animate-fade-in">
-        <h3 className="font-semibold text-lg mb-2">Literature QC failed</h3>
-        <p className="text-sm text-muted-foreground mb-4">{error}</p>
-        <div className="flex justify-end">
-          <Button onClick={onComplete} size="lg" className="h-12 px-6 rounded-xl group">
-            Continue to Experiment Plan
-            <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+      <div className="text-center p-6 rounded-2xl border border-destructive/50 bg-destructive/5">
+        <p className="text-destructive text-sm">Literature check failed. Try &quot;Run literature QC&quot; again.</p>
+        <p className="text-xs text-muted-foreground mt-1">{s2Error}</p>
+        <div className="mt-3 flex items-center justify-center">
+          <Button
+            onClick={() => bumpS2Rerun()}
+            variant="secondary"
+            size="sm"
+            className="text-xs h-7 rounded-full border border-border/80 bg-gradient-to-b from-zinc-800 to-zinc-900"
+            data-testid="stage2-run-lit-qc"
+          >
+            Run literature QC
           </Button>
         </div>
       </div>
     );
   }
+  if (s2Loading && !result) {
+    return (
+      <div className="text-center p-6 rounded-2xl border border-border/60 bg-primary/5">
+        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent mx-auto mb-2 animate-spin" />
+        <p className="text-foreground/90">Checking novelty against the literature (Tavily)…</p>
+        {s2Progress > 0 && s2Progress < 100 ? (
+          <p className="text-sm text-foreground/80 mt-2 max-w-2xl mx-auto">
+            {Math.round(s2Progress)}% complete
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
-  if (!result) return null;
+  if (!result) {
+    return (
+      <div className="text-center p-6 rounded-2xl border border-border/60 bg-primary/5">
+        <p className="text-foreground/90">Literature check will start after hypothesis analysis completes.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -234,15 +204,14 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
                 </div>
               ) : null}
               <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
-                Protocol host hit{" "}
-                {result.noveltyDiagnostics.hasProtocolRepositoryHit ? "yes" : "no"}
+                Protocol host hit {result.noveltyDiagnostics.hasProtocolRepositoryHit ? "yes" : "no"}
               </div>
               <div className="rounded-lg border border-border/80 bg-card/30 px-2 py-1.5">
                 Vendor hit {result.noveltyDiagnostics.hasVendorOrResourceHit ? "yes" : "no"}
               </div>
             </div>
             <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
-              {result.noveltyDiagnostics.rulesTriggered.map((rule, i) => (
+              {(result.noveltyDiagnostics.rulesTriggered ?? []).map((rule: string, i: number) => (
                 <li key={i}>{rule}</li>
               ))}
             </ul>
@@ -256,6 +225,7 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
         </p>
         {result.references.map((ref, i) => {
           const diag = result.noveltyDiagnostics?.perReference?.[i];
+          const blurb = ref.snippet ?? ref.relevance;
           return (
             <a
               key={`${ref.title}-${i}`}
@@ -269,68 +239,94 @@ export function Stage2Literature({ hypothesis, onComplete }: Props) {
                 <h4 className="font-medium text-foreground/95 leading-snug group-hover:text-primary transition-colors">
                   {ref.title}
                 </h4>
-                <div className="flex flex-col items-end gap-1 shrink-0">
+                <div className="flex items-center gap-2 text-xs text-primary shrink-0">
                   {diag ? (
-                    <Badge variant="outline" className="text-[10px] font-normal border-border">
-                      {hostKindLabel(diag.hostKind)} · score {diag.retrievalScore.toFixed(2)} ·
-                      overlap {(diag.hypothesisTokenOverlap * 100).toFixed(0)}%
-                      {typeof diag.trigramSimilarity === "number"
-                        ? ` · tri ${diag.trigramSimilarity.toFixed(2)}`
-                        : ""}
-                      {typeof diag.embeddingSimilarity === "number"
-                        ? ` · emb ${diag.embeddingSimilarity.toFixed(2)}`
-                        : ""}
+                    <Badge variant="outline" className="text-[10px] px-2 py-0 h-5">
+                      {hostKindLabel(diag.hostKind)}
                     </Badge>
                   ) : null}
-                  <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <div className="p-1 rounded bg-primary/10 group-hover:bg-primary/20">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </div>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground mb-1">{ref.authors}</p>
-              <p className="text-xs text-muted-foreground font-mono mb-3">
-                {ref.journal} · {ref.year} · {ref.doi === "N/A" ? "source link" : `doi:${ref.doi}`}
-              </p>
-              {(ref.validationStatus || typeof ref.confidence === "number") && (
-                <p className="text-xs mb-2">
-                  <span
-                    className={
-                      ref.validationStatus === "validated" ? "text-emerald-400" : "text-amber-400"
-                    }
-                  >
-                    {ref.validationStatus === "validated"
-                      ? "Validated by Llama 8B"
-                      : "Weak match (Llama 8B)"}
-                  </span>
+              <p className="text-sm text-foreground/70 line-clamp-2 mb-3 leading-relaxed">{blurb}</p>
+              {diag ? (
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                   {typeof ref.confidence === "number" ? (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · confidence {(ref.confidence * 100).toFixed(0)}%
+                    <Badge
+                      variant="outline"
+                      className={
+                        ref.validationStatus === "validated"
+                          ? "text-emerald-200 border-emerald-400/40"
+                          : "text-amber-200 border-amber-400/40"
+                      }
+                    >
+                      {ref.validationStatus === "validated" ? "Llama 8B validated" : "Llama 8B weak match"}
+                    </Badge>
+                  ) : null}
+                  <span>
+                    Relevance <span className="font-mono text-foreground">{diag.retrievalScore.toFixed(2)}</span>
+                  </span>
+                  <span>
+                    Hypothesis overlap{" "}
+                    <span className="font-mono text-foreground">
+                      {(diag.hypothesisTokenOverlap * 100).toFixed(0)}%
+                    </span>
+                  </span>
+                  {typeof diag.combinedEvidenceScore === "number" ? (
+                    <span>
+                      Fused{" "}
+                      <span className="font-mono text-foreground">
+                        {diag.combinedEvidenceScore.toFixed(2)}
+                      </span>
                     </span>
                   ) : null}
-                </p>
-              )}
-              <p className="text-sm text-foreground/80 border-l-2 border-primary/40 pl-3 leading-relaxed">
-                {ref.relevance}
-              </p>
+                </div>
+              ) : null}
             </a>
           );
         })}
-        {result.references.length === 0 && (
-          <div className="rounded-xl border border-border bg-card/50 p-5 text-sm text-muted-foreground">
-            No relevant references were found for this hypothesis.
-          </div>
-        )}
       </div>
 
-      <div className="flex justify-end">
-        <Button
-          onClick={onComplete}
-          size="lg"
-          className="bg-primary-gradient hover:opacity-95 shadow-glow h-12 px-6 rounded-xl group"
-          data-testid="stage2-generate-plan"
-        >
-          Generate Full Experiment Plan
-          <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
-        </Button>
+      <div className="pt-2 text-center" data-testid="stage2-build-plan-cta">
+        {s2Error && result && (
+          <p className="text-destructive text-sm mb-2">Background refresh failed: {s2Error}</p>
+        )}
+        <div className="mt-1 flex items-center justify-center">
+          {s2Loading && <p className="text-xs text-muted-foreground">Literature check running in background…</p>}
+        </div>
+        <p className="text-xs text-muted-foreground/90 mb-3">
+          When you are happy with the literature readout, start plan generation. You can re-run checks
+          without losing your current hypothesis{sessionKey ? " and literature session" : ""}.
+        </p>
+        <div className="w-full max-w-2xl mx-auto flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-stretch sm:gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => bumpS2Rerun()}
+            className="h-9 shrink-0 w-full min-w-0 rounded-md border text-xs sm:flex-1"
+            data-testid="stage2-run-lit-qc"
+          >
+            Run literature QC
+          </Button>
+          <div className="min-w-0 flex-1">
+            <div className="flex h-9 w-full items-stretch rounded-md bg-zinc-800 p-px">
+              <Button
+                type="button"
+                onClick={onComplete}
+                disabled={s2Loading || s3Loading}
+                className="h-full w-full min-w-0 rounded-[6px] px-2 text-xs leading-tight sm:text-sm btn-cta"
+                data-testid="stage2-generate-experiment"
+              >
+                {s2Loading && (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin" />
+                )}
+                {s3Loading ? "Generating plan…" : "Generate next-step experiment plan"}
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
