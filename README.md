@@ -31,7 +31,7 @@
 8. [Repository layout](#repository-layout)
 9. [Prerequisites](#prerequisites)
 10. [Installation](#installation)
-11. [Configuration](#configuration)
+11. [Configuration](#configuration) — includes [scientist-trust contract](#reliability-focused-environment-flags)
 12. [Running locally](#running-locally)
 13. [Docker & databases](#docker--databases)
 14. [Deployment notes](#deployment-notes)
@@ -86,9 +86,9 @@ Organisations brief specialist labs to estimate **protocol**, **reagents**, **co
 | Area | What the repo implements |
 |------|---------------------------|
 | **Grounded planning** | Retrieval packet (Tavily) injected into planner prompt; per-section Tavily verification + Llama 8B relevance labels. |
-| **Governance & procurement gates** | Human/animal/IBC language checks; procurement-critical lines must cite allow-listed URLs (with optional auto-repair when not strict). |
+| **Governance & procurement gates** | Human/animal/IBC language checks; procurement-critical lines must cite allow-listed URLs under the **scientist-trust** configuration (strict gates on). |
 | **Scientist loop** | Reviews stored in SQLite or Postgres; similar reviews merged into planner prompt (`PRIOR SCIENTIST CORRECTIONS`). |
-| **Resilience vs strictness** | `LABMIND_STRICT_PLAN_GATES` toggles between “always try to return 200 with warnings/stub” and “fail closed with 422/502”. |
+| **Scientist-trust contract** | **`LABMIND_STRICT_PLAN_GATES=1`** so a **200** means gates passed (no silent stubs). **`LABMIND_DUAL_FEEDBACK_AB=1`** so feedback impact is **measured** (shadow plan without priors) whenever priors are merged — not only asserted. |
 | **Reasoning contract** | `ensureFullPlanReasoningRoot` normalises `plan.reasoning` for UI and API consumers. |
 
 ---
@@ -111,7 +111,7 @@ Organisations brief specialist labs to estimate **protocol**, **reagents**, **co
 - **Scientific mechanistic validation** (`scientific-mechanistic.js`) exposed in API + UI.
 - **Execution readiness** tiering (`execution-readiness.js`).
 - **Feedback learning report** (`feedback-learning-report.js`).
-- **Dual-feedback A/B shadow** (optional second plan without priors for metrics) when env/body opt-in.
+- **Dual-feedback A/B shadow** — **permanent part of the trust model** when expert priors are in play: a second planner pass **without** those priors records scores in `feedbackLearningReport` so “learning from reviews” is **auditable** (env `LABMIND_DUAL_FEEDBACK_AB=1` or client `dualFeedbackAb`, with Tavily + Groq + merged feedback present).
 
 ### Platform
 
@@ -303,8 +303,46 @@ npm install
 
 1. Copy `backend/.env.example` → `backend/.env`.
 2. Set at minimum **`TAVILY_API_KEY`**, **`GROQ_API_KEY`**, **`GEMINI_API_KEY`** for end-to-end live generation (Gemini used when Groq plan calls fail).
-3. Optionally set **`LABMIND_API_KEY`**; if set, mirror in frontend as **`VITE_LABMIND_API_KEY`** (and **`VITE_LABMIND_TENANT_ID`** if multi-tenant).
-4. Point frontend to backend: **`VITE_BACKEND_URL`** (defaults to `http://localhost:8080` in client code paths — verify in `frontend/src/lib/storage.ts` / API modules).
+3. **Scientist-trust defaults (permanent product posture):** set **`LABMIND_STRICT_PLAN_GATES=1`** and **`LABMIND_DUAL_FEEDBACK_AB=1`** in `backend/.env`. These are how LabMind is **meant to be run** whenever a **200** response should mean “a PI could defend this plan,” and whenever you surface **feedback-informed** generation (see [Scientist-trust contract](#reliability-focused-environment-flags)). `backend/.env.example` ships with the same values so new clones match that contract.
+4. Optionally set **`LABMIND_API_KEY`**; if set, mirror in frontend as **`VITE_LABMIND_API_KEY`** (and **`VITE_LABMIND_TENANT_ID`** if multi-tenant).
+5. Point frontend to backend: **`VITE_BACKEND_URL`** (defaults to `http://localhost:8080` in client code paths — verify in `frontend/src/lib/storage.ts` / API modules).
+
+### Scientist-trust contract (environment) {#reliability-focused-environment-flags}
+
+LabMind’s **credibility with scientists** does not come from never returning an error; it comes from **never calling a failed or gate-violating draft a success**. That behaviour is **locked in** with **`LABMIND_STRICT_PLAN_GATES=1`**. Credibility for the **feedback loop** is **locked in** with **`LABMIND_DUAL_FEEDBACK_AB=1`** whenever merged prior reviews exist, so impact is **measured**, not only narrated.
+
+Keep real secrets in **`backend/.env`** (gitignored). The example file documents the **same trust posture** for copy-paste setup.
+
+#### `LABMIND_STRICT_PLAN_GATES=1` — non‑negotiable for trust‑bearing responses
+
+| Aspect | Behaviour |
+|--------|-----------|
+| **Product role** | This is the **default intended configuration**: a **200** from `/api/experiment-plan` must mean the plan **passed safety, procurement grounding, and governance** after automated checks, and was produced from **parseable model JSON** (not a last‑resort stub). |
+| **What it enforces** | **502** if all planner models fail or output is not parseable JSON; **422** if **safety**, **procurement grounding**, or **governance** still fail after compliance logic. |
+
+**Why scientists can trust it:** There is **no silent downgrade** to a generic stub, **no release** that pretends procurement evidence exists when it does not, and **no missing** IRB / IACUC / IBC language when the hypothesis implies that risk class. **HTTP success aligns with reviewable quality.**
+
+**Engineering escape hatch only:** The codebase still allows **unset** strict gates so a laptop without keys can smoke-test UI paths; that mode is **not** the LabMind trust story and **must not** be used for demos to judges, PIs, or production claims. Treat **`unset` as local debugging only.**
+
+#### `LABMIND_DUAL_FEEDBACK_AB=1` — permanent when you claim “learning from experts”
+
+| Aspect | Behaviour |
+|--------|-----------|
+| **Product role** | Whenever **merged prior feedback** exists and Tavily + Groq are available, the server runs a **shadow planning pass** with the **same retrieval packet** but **prior corrections stripped** from the prompt. The main response still uses priors; metrics compare **with vs without** that expert context. |
+| **Where it surfaces** | **`feedbackSummary.feedbackLearningReport`** (and related dual‑LLM fields) so reviewers and judges see **quantified** movement in score and gates, not only prose. |
+
+**Why that builds trust:** The system **proves** whether expert snippets change the plan quality model, instead of asking the audience to believe it. The cost is roughly **2×** planner tokens and extra latency for that request when the shadow arm runs; that is the **price of an auditable learning story**.
+
+**When the shadow does not run:** If there are **no** merged priors, there is nothing to ablate — enable dual AB anyway so behaviour is consistent the moment reviews exist.
+
+#### Summary
+
+| Variable | Trust guarantee |
+|----------|-----------------|
+| **`LABMIND_STRICT_PLAN_GATES=1`** | **200 = passed gates**; failures are visible **422/502**, not disguised success. |
+| **`LABMIND_DUAL_FEEDBACK_AB=1`** | **Feedback impact is measured** (shadow without priors) whenever priors are merged — core to the **scientist review / learning loop** story. |
+
+Together they are the **permanent baseline** for any environment where LabMind is presented as a **serious lab scoping tool**, not a toy demo.
 
 ---
 
@@ -377,8 +415,8 @@ If `DATABASE_URL` is **unset**, reviews use `backend/data/labmind.sqlite` with t
 | `EXPERIMENT_PLAN_LLAMA_FALLBACK_MODEL` | No | Inserted into Groq fallback model list for planning. |
 | `OPENAI_API_KEY` | No | Enables embedding cosine novelty assist. |
 | `OPENAI_EMBEDDING_MODEL` | No | Default `text-embedding-3-small`. |
-| `LABMIND_DUAL_FEEDBACK_AB` | No | `1` enables dual shadow arm when other conditions met. |
-| `LABMIND_STRICT_PLAN_GATES` | No | `1` = strict 422/502 on gate/LLM/parse failures; unset = resilient stub/repair path + `metadata.releaseDegraded`. |
+| `LABMIND_DUAL_FEEDBACK_AB` | **Yes (trust posture)** | Set to **`1`** for production and demos: runs the **shadow plan** (no priors in prompt) when merged feedback + Tavily + Groq exist — see [Scientist-trust contract](#reliability-focused-environment-flags). **~2×** planner cost when the arm runs. |
+| `LABMIND_STRICT_PLAN_GATES` | **Yes (trust posture)** | Set to **`1`** so **200** means gates passed — see [Scientist-trust contract](#reliability-focused-environment-flags). Unset only for **local engineering** without keys (not for PI/judge-facing runs). |
 | `LABMIND_API_KEY` | No | When set, **all** routes using `requireLabmindApiKey` need Bearer or `x-api-key` (skipped when `NODE_ENV=test`). |
 | `DATABASE_URL` | No | When set, Postgres mode for reviews. |
 | `NODE_ENV` | No | `test` bypasses API key middleware for automated tests. |
@@ -551,17 +589,17 @@ erDiagram
 1. **Hypothesis** received; domain inferred or taken from client.
 2. **Similar reviews** loaded (`findSimilarReviews`, `getReviewsByDomain`) and merged with body `priorFeedback`.
 3. **Literature packet** built (`buildLiteratureRetrievalPacket`) — or minimal packet if Tavily missing.
-4. **Optional dual shadow** plan for A/B metrics.
+4. **Dual shadow** plan for measured feedback impact when **`LABMIND_DUAL_FEEDBACK_AB=1`** (or body flag) and merged priors + Tavily + Groq are present.
 5. **Outline** optional (`generatePlanOutline`).
 6. **Planner prompt** includes retrieval JSON (truncated), governance instructions, materials count rules, regulatory hints, **prior scientist corrections** block.
-7. **Parse** JSON (`extractJsonObject`); resilient path may substitute **`buildMinimalFallbackPlan`**.
+7. **Parse** JSON (`extractJsonObject`); with **`LABMIND_STRICT_PLAN_GATES=1`**, parse failure is **502** (no stub). **Stub fallback exists in code only** for strict‑gates‑unset local runs — **not** part of the scientist‑trust product path.
 8. **Merge** literature QC if model omitted meaningful refs.
 9. **Verification** sources fetched + validated.
 10. **Compliance patches** (`applyAllReleaseCompliancePatches`).
-11. **Mechanistic + safety** checks; strict vs resilient branches.
+11. **Mechanistic + safety** checks; under strict gates, failures **stop** the request instead of auto‑repair / bypass for display.
 12. **Enrich** quotes / financial normalisation.
 13. **Quality + grounding**; procurement repair if allowed.
-14. **Governance** validation; footer / bypass per strict flag.
+14. **Governance** validation; with strict gates, failure is **422**; footer / bypass paths apply only when strict gates are **unset** (non–trust‑contract runs).
 15. **`ensureFullPlanReasoningRoot`** then JSON response.
 
 ---
@@ -575,7 +613,7 @@ erDiagram
 | `validateGovernanceRelease` | Animal / human / biocontainment language when implied by hypothesis + plan text. |
 | `evaluatePlanQuality` | Completeness, evidence coverage, operational heuristics, warnings/errors. |
 | `runOperationalExtraChecks` | Additional operational warnings. |
-| `LABMIND_STRICT_PLAN_GATES` | When `1`, failures surface as **422/502** instead of stub/repair/degraded success. |
+| `LABMIND_STRICT_PLAN_GATES` | **`1` is the intended default** — failures surface as **422/502** instead of stub/repair/degraded success; **200** stays aligned with scientist trust. |
 
 ---
 
@@ -657,7 +695,7 @@ erDiagram
 - **In-memory rate limit** not suitable for multi-instance without sticky IP or Redis.
 - **No user accounts** — tenancy is header-based only.
 - **Model hallucination risk** on catalog numbers — mitigated by `VERIFY-CATALOG`, gates, and prompts but not eliminated.
-- **Resilient plan mode** can return **stub** or **auto-repaired grounding** — inappropriate for compliance-critical use without human review.
+- **Resilient plan mode** (strict gates **unset**) can return **stub** or **auto-repaired grounding** — **contradicts the scientist-trust contract**; reserve for local engineering only, not for demos or production claims.
 - **E2E tests** do not exercise live Groq/Tavily/Gemini by default.
 
 ---
@@ -727,7 +765,7 @@ erDiagram
    No. SQLite is automatic when `DATABASE_URL` is unset.
 
 3. **What does strict gating do?**  
-   `LABMIND_STRICT_PLAN_GATES=1` removes stub/repair “always 200” behaviour for failed gates or models.
+   `LABMIND_STRICT_PLAN_GATES=1` is the **default trust posture**: it removes stub/repair “always 200” behaviour so failed gates or models return **422/502** instead of a disguised success.
 
 4. **How does tenancy work?**  
    HTTP header `x-tenant-id`; reviews and similarity queries are scoped.

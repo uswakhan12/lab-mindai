@@ -17,6 +17,13 @@ interface Props {
 
 export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
   const ep = plan.experimentPlan;
+  const budget = ep.budget;
+  const contingencyPct = Number.isFinite(Number(budget?.contingencyPercent))
+    ? Number(budget?.contingencyPercent)
+    : 10;
+  const totalWithContingency = Number.isFinite(Number(budget?.totalWithContingencyUSD))
+    ? Number(budget?.totalWithContingencyUSD)
+    : Math.round(Number(ep.totalCostUSD || 0) * (1 + contingencyPct / 100));
   const hasVerificationSources =
     !!plan.verificationSources &&
     Object.values(plan.verificationSources).some((arr) => Array.isArray(arr) && arr.length > 0);
@@ -61,15 +68,15 @@ export function OverviewTab({ plan, hypothesis, executionReadiness }: Props) {
         <StatCard
           icon={<DollarSign className="h-5 w-5" />}
           label="Estimated total cost"
-          value={`$${ep.totalCostUSD.toLocaleString()}`}
-          sub={`Includes ${ep.budget.contingencyPercent}% contingency: $${ep.budget.totalWithContingencyUSD.toLocaleString()}`}
+          value={`$${Number(ep.totalCostUSD ?? 0).toLocaleString()}`}
+          sub={`Includes ${contingencyPct}% contingency: $${totalWithContingency.toLocaleString()}`}
           big
         />
         <StatCard
           icon={<Clock className="h-5 w-5" />}
           label="Estimated duration"
-          value={`${ep.totalDurationDays} days`}
-          sub={`${Math.ceil(ep.totalDurationDays / 7)} weeks of bench time`}
+          value={`${Number(ep.totalDurationDays ?? 0)} days`}
+          sub={`${Math.ceil(Number(ep.totalDurationDays ?? 0) / 7)} weeks of bench time`}
           big
         />
       </div>

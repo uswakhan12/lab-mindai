@@ -39,3 +39,23 @@ test("normalizePlanFinancials fills empty budget from materials", () => {
   assert.equal(plan.experimentPlan.budget.byCategory[0].amountUSD, 500);
   assert.equal(plan.experimentPlan.budget.totalWithContingencyUSD, 500);
 });
+
+test("normalizePlanFinancials creates budget when missing and material sum is zero but header has cost", () => {
+  const plan = {
+    experimentPlan: {
+      totalCostUSD: 2400,
+      materials: [{ item: "X", totalCostUSD: 0 }],
+    },
+  };
+  normalizePlanFinancials(plan);
+  assert.ok(plan.experimentPlan.budget);
+  assert.equal(plan.experimentPlan.budget.byCategory[0].amountUSD, 2400);
+  assert.equal(plan.experimentPlan.budget.totalWithContingencyUSD, 2640);
+});
+
+test("normalizePlanFinancials ensures budget shell when plan has empty materials and no cost", () => {
+  const plan = { experimentPlan: { materials: [] } };
+  normalizePlanFinancials(plan);
+  assert.ok(Array.isArray(plan.experimentPlan.budget.byCategory));
+  assert.equal(plan.experimentPlan.budget.totalWithContingencyUSD, 0);
+});

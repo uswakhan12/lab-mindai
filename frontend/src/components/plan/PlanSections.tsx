@@ -17,21 +17,38 @@ export function BudgetTab({ plan }: { plan: FullPlan }) {
   const [currency, setCurrency] = useState<"USD" | "EUR" | "GBP">("USD");
   const { rate, symbol } = RATES[currency];
   const ep = plan.experimentPlan;
+  const budget = ep.budget;
+  const byCategory = Array.isArray(budget?.byCategory) ? budget.byCategory : [];
+  const contingencyPercent = Number.isFinite(Number(budget?.contingencyPercent))
+    ? Number(budget?.contingencyPercent)
+    : 10;
 
-  const data = ep.budget.byCategory.map((c) => ({
+  const data = byCategory.map((c) => ({
     name: c.category,
     value: Math.round(c.amountUSD * rate),
   }));
   const subtotal = data.reduce((s, d) => s + d.value, 0);
-  const contingency = Math.round(subtotal * (ep.budget.contingencyPercent / 100));
+  const contingency = Math.round(subtotal * (contingencyPercent / 100));
   const grandTotal = subtotal + contingency;
+
+  if (data.length === 0) {
+    return (
+      <div className="space-y-6">
+        <VerificationSourcesBlock plan={plan} section="budget" />
+        <p className="text-sm text-muted-foreground rounded-xl border border-border bg-card/40 p-6">
+          No budget categories were returned for this plan. Regenerate after checking model output, or
+          ensure material line totals / totalCostUSD are present so the server can infer a budget.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <VerificationSourcesBlock plan={plan} section="budget" />
       <div className="flex items-center justify-between flex-wrap gap-3" data-print-hide>
         <p className="text-sm text-muted-foreground">
-          All amounts include {ep.budget.contingencyPercent}% contingency buffer.
+          All amounts include {contingencyPercent}% contingency buffer.
         </p>
         <div className="flex gap-1 rounded-lg border border-border bg-card/50 p-1">
           {(["USD", "EUR", "GBP"] as const).map((c) => (
@@ -89,7 +106,7 @@ export function BudgetTab({ plan }: { plan: FullPlan }) {
           ))}
           <div className="flex items-center justify-between p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
             <span className="text-sm text-amber-300">
-              Contingency ({ep.budget.contingencyPercent}%)
+              Contingency ({contingencyPercent}%)
             </span>
             <span className="font-mono text-amber-300">
               {symbol}
