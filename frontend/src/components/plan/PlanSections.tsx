@@ -140,12 +140,29 @@ const TIMELINE_PHASE_PAINT: Record<string, { fill: string; border: string }> = {
 const TIMELINE_TRACK = "rgba(120, 120, 130, 0.28)";
 
 export function TimelineTab({ plan }: { plan: FullPlan }) {
-  const phases = plan.experimentPlan.timeline.phases;
-  const total = plan.experimentPlan.totalDurationDays;
+  const ep = plan.experimentPlan;
+  const phases = Array.isArray(ep?.timeline?.phases) ? ep.timeline.phases : [];
+  const total = Number(ep?.totalDurationDays) && Number.isFinite(Number(ep?.totalDurationDays))
+    ? Number(ep.totalDurationDays)
+    : 0;
   /** Backend often uses 1-based days (first day = 1). Chart axis is 0..total, so 1-based bars must offset by (start-1) or the first block sits off the left. */
   const minStart = phases.length ? Math.min(...phases.map((p) => p.startDay)) : 0;
   const oneBased = minStart >= 1;
   const typeKeys = Object.keys(TIMELINE_PHASE_PAINT) as (keyof typeof TIMELINE_PHASE_PAINT)[];
+
+  if (phases.length === 0) {
+    return (
+      <div className="space-y-5">
+        <VerificationSourcesBlock plan={plan} section="timeline" />
+        <p className="text-sm text-muted-foreground rounded-xl border border-border bg-card/40 p-6">
+          No timeline phases were returned for this plan. Regenerate the plan, or check that the model
+          included <span className="font-mono text-foreground/90">experimentPlan.timeline.phases</span>{" "}
+          in the response.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <VerificationSourcesBlock plan={plan} section="timeline" />

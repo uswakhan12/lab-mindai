@@ -3,8 +3,9 @@
   Generated/expanded from repository source. Prefer verifying behaviour in code
   when this file and implementation diverge.
 -->
-**Watch the demo video**
-(https://drive.google.com/file/d/1maUpBxlDiGnwiEHSE9Sk_KbDBoU2KEp7/view?usp=sharing)](YOUR_VIDEO_LINK_HERE)
+
+[![Watch the demo video](https://img.shields.io/badge/Watch%20Demo-Video-red?logo=youtube)](https://drive.google.com/file/d/1maUpBxlDiGnwiEHSE9Sk_KbDBoU2KEp7/view?usp=sharing)
+
 # LabMind AI
 
 **Turn a scientific hypothesis into an operationally grounded experiment plan.**
