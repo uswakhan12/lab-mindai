@@ -4,8 +4,8 @@
 import type { FullPlan } from "@/types/plan";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
 
-/** Headers for secured backend routes (LABMIND_API_KEY) and multi-tenant isolation. */
-export function labmindApiHeaders(json = true): Record<string, string> {
+/** Headers for secured backend routes (VITE_LABMIND_* env still maps to backend LABMIND_API_KEY). */
+export function cruxApiHeaders(json = true): Record<string, string> {
   const h: Record<string, string> = {};
   if (json) h["Content-Type"] = "application/json";
   const key = import.meta.env.VITE_LABMIND_API_KEY as string | undefined;
@@ -15,11 +15,20 @@ export function labmindApiHeaders(json = true): Record<string, string> {
   return h;
 }
 
-const HISTORY_KEY = "labmind:history:v1";
-const REVIEWS_KEY = "labmind:reviews:v1";
+/** @deprecated Use cruxApiHeaders */
+export const labmindApiHeaders = cruxApiHeaders;
+
+const HISTORY_KEY = "cruxai:history:v1";
+const REVIEWS_KEY = "cruxai:reviews:v1";
+const LEGACY_HISTORY_KEY = "labmind:history:v1";
+const LEGACY_REVIEWS_KEY = "labmind:reviews:v1";
 const MAX_HISTORY = 5;
 
 const isBrowser = () => typeof window !== "undefined";
+
+function readLocalJson(key: string, legacyKey: string): string | null {
+  return localStorage.getItem(key) ?? localStorage.getItem(legacyKey);
+}
 
 /* -------------------- History -------------------- */
 
@@ -36,7 +45,7 @@ export interface HistoryEntry {
 export function getHistory(): HistoryEntry[] {
   if (!isBrowser()) return [];
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = readLocalJson(HISTORY_KEY, LEGACY_HISTORY_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as HistoryEntry[];
   } catch {
@@ -91,7 +100,7 @@ export interface Review {
 export function getReviews(): Review[] {
   if (!isBrowser()) return [];
   try {
-    const raw = localStorage.getItem(REVIEWS_KEY);
+    const raw = readLocalJson(REVIEWS_KEY, LEGACY_REVIEWS_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as Review[];
   } catch {
@@ -113,7 +122,7 @@ export function saveReview(review: Review): void {
 export async function saveReviewToBackend(review: Review): Promise<void> {
   const res = await fetch(`${BACKEND_URL}/api/reviews`, {
     method: "POST",
-    headers: labmindApiHeaders(),
+    headers: cruxApiHeaders(),
     body: JSON.stringify(review),
   });
   if (!res.ok) {
@@ -129,7 +138,7 @@ export function getReviewsForDomain(domain: string): Review[] {
 export async function fetchReviewsForDomain(domain: string, limit = 20): Promise<Review[]> {
   const params = new URLSearchParams({ domain, limit: String(limit) });
   const res = await fetch(`${BACKEND_URL}/api/reviews?${params.toString()}`, {
-    headers: labmindApiHeaders(false),
+    headers: cruxApiHeaders(false),
   });
   if (!res.ok) return [];
   const payload = (await res.json().catch(() => ({}))) as { reviews?: Review[] };

@@ -118,8 +118,8 @@ export function ScientistReviewPanel({ plan, hypothesis }: { plan: FullPlan; hyp
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="font-semibold text-lg">Scientist Review</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="font-semibold text-lg text-lab-violet light:text-violet-900">Scientist Review</h3>
+          <p className="text-sm text-violet-200/90 light:text-violet-800/90">
             Your corrections train future plans in this domain.
           </p>
         </div>
@@ -181,7 +181,7 @@ export function ScientistReviewPanel({ plan, hypothesis }: { plan: FullPlan; hyp
       </div>
       <Button
         onClick={() => void submit()}
-        className="w-full bg-primary-gradient"
+        className="w-full btn-cta"
         disabled={overall === 0}
       >
         Submit Review

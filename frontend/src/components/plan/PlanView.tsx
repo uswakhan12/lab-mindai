@@ -22,21 +22,18 @@ import {
   DollarSign,
   Calendar,
   CheckCircle2,
+  Check,
   ShieldAlert,
   Sparkles,
+  List,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { encodeHypothesis, getReviewsForDomain } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+import { PLAN_TAB_STYLE, type PlanTabId } from "@/lib/planAccents";
 
-type TabId =
-  | "overview"
-  | "protocol"
-  | "materials"
-  | "budget"
-  | "timeline"
-  | "validation"
-  | "safety";
+type TabId = PlanTabId;
 interface ModelFlow {
   retrievalModel?: string;
   planningModel?: string;
@@ -88,6 +85,7 @@ export function PlanView({
   executionReadiness?: ExecutionReadiness;
 }) {
   const [tab, setTab] = useState<TabId>("overview");
+  const [tocOpen, setTocOpen] = useState(false);
   const priorReviews = getReviewsForDomain(plan.domain);
 
   const copyLink = async () => {
@@ -110,12 +108,17 @@ export function PlanView({
       {/* Header bar */}
       <div className="flex items-start justify-between gap-3 flex-wrap" data-print-hide>
         <div>
-          <p className="text-xs uppercase tracking-widest text-primary mb-1">Stage 3 · Complete</p>
-          <h2 className="text-xl font-semibold" data-testid="plan-ready-header">
+          <p className="text-xs uppercase tracking-widest text-cyan-300 light:text-cyan-800 mb-1 flex items-center gap-1.5">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/15 text-emerald-300 light:border-emerald-600/35 light:bg-emerald-500/12 light:text-emerald-800">
+              <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+            </span>
+            Stage 3 · Complete
+          </p>
+          <h2 className="text-xl font-semibold text-gradient" data-testid="plan-ready-header">
             Your experiment plan is ready
           </h2>
           {modelFlow?.planningModel && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p data-print-hide className="text-xs text-muted-foreground mt-1">
               Generated with{" "}
               <span className="font-mono text-foreground">{modelFlow.planningModel}</span>
               {modelFlow.retrievalModel ? (
@@ -139,7 +142,7 @@ export function PlanView({
             <Link2 className="h-4 w-4 mr-2" />
             Copy Link
           </Button>
-          <Button size="sm" onClick={downloadPDF} className="bg-primary-gradient">
+          <Button size="sm" onClick={downloadPDF} className="btn-cta">
             <Download className="h-4 w-4 mr-2" />
             Download PDF
           </Button>
@@ -216,10 +219,10 @@ export function PlanView({
       {/* Demo banner if prior feedback exists */}
       {priorReviews.length > 0 && (
         <div
-          className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3"
+          className="rounded-xl border border-lab-violet/30 bg-gradient-to-r from-lab-violet/8 to-card/50 p-4 flex items-start gap-3"
           data-print-hide
         >
-          <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <Sparkles className="h-4 w-4 text-lab-violet shrink-0 mt-0.5" />
           <p className="text-sm">
             💡 This plan was improved by{" "}
             <strong>
@@ -546,15 +549,16 @@ export function PlanView({
             {TABS.map((t) => {
               const Icon = t.icon;
               const active = t.id === tab;
+              const acc = PLAN_TAB_STYLE[t.id];
               return (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
                   className={cn(
-                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all text-left",
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all text-left border",
                     active
-                      ? "bg-primary/15 text-primary border border-primary/30"
-                      : "text-muted-foreground hover:text-foreground hover:bg-card/50",
+                      ? acc.navActive
+                      : "text-muted-foreground border-transparent hover:text-foreground hover:bg-card/50",
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
@@ -571,7 +575,12 @@ export function PlanView({
             className="hidden md:block sticky top-20 z-[5] mb-4 rounded-lg border border-border/80 bg-background/95 px-4 py-2.5 backdrop-blur-md supports-[backdrop-filter]:bg-background/90"
             aria-live="polite"
           >
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+            <p
+              className={cn(
+                "text-xs font-semibold uppercase tracking-widest",
+                tab ? PLAN_TAB_STYLE[tab].kicker : "",
+              )}
+            >
               {TABS.find((t) => t.id === tab)?.label}
             </p>
           </div>
@@ -591,8 +600,12 @@ export function PlanView({
         </div>
       </div>
 
-      {/* Print-only: render ALL sections sequentially */}
+      {/* Print-only: hypothesis + sections (no UI chrome) */}
       <div data-print-only className="space-y-8 hidden">
+        <section data-print-section className="print-hypothesis">
+          <h1 className="text-base font-bold tracking-tight m-0">Hypothesis</h1>
+          <p className="text-sm leading-relaxed mt-2 mb-0 text-black">{hypothesis}</p>
+        </section>
         <section data-print-section>
           <h2>Overview</h2>
           <OverviewTab
@@ -627,8 +640,49 @@ export function PlanView({
         </section>
       </div>
 
-      <ReasoningPanel plan={plan} />
+      <div data-print-hide>
+        <ReasoningPanel plan={plan} />
+      </div>
       <ScientistReviewPanel plan={plan} hypothesis={hypothesis} />
+
+      {/* Floating quick tab switcher: usable from any scroll position */}
+      <div className="fixed bottom-6 right-6 z-40" data-print-hide>
+        <Button
+          onClick={() => setTocOpen((v) => !v)}
+          className="rounded-full h-11 px-4 btn-cta"
+          aria-label="Jump to section"
+        >
+          {tocOpen ? <X className="h-4 w-4 mr-1.5" /> : <List className="h-4 w-4 mr-1.5" />}
+          Jump to section
+        </Button>
+        {tocOpen && (
+          <div className="mt-2 w-56 rounded-xl border border-border bg-card/95 backdrop-blur-md p-2 shadow-elegant">
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              const active = t.id === tab;
+              const acc = PLAN_TAB_STYLE[t.id];
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setTab(t.id);
+                    setTocOpen(false);
+                    const el = document.getElementById("stage-content");
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all text-left border",
+                    active ? acc.navActive : "text-muted-foreground border-transparent hover:text-foreground hover:bg-card/50",
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import type { FullPlan, PlanVerificationSection } from "@/types/plan";
+import { VERIFY_BLOCK_STYLE } from "@/lib/planAccents";
 import { ExternalLink } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Props {
   plan: FullPlan;
@@ -10,10 +12,12 @@ export function VerificationSourcesBlock({ plan, section }: Props) {
   const items = plan.verificationSources?.[section];
   if (!items?.length) return null;
 
+  const st = VERIFY_BLOCK_STYLE[section];
+
   return (
-    <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 mb-6" data-print-card>
-      <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1">
-        Verify this section (Tavily)
+    <div className={cn("rounded-xl border p-4 mb-6", st.box)} data-print-card>
+      <p className={cn("text-xs font-semibold uppercase tracking-widest mb-1", st.kicker)}>
+        Web source cross-check (Tavily)
       </p>
       <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
         Independent web results to sanity-check catalog choices, cost context, timelines, QC norms,
@@ -26,10 +30,14 @@ export function VerificationSourcesBlock({ plan, section }: Props) {
               href={s.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline break-words"
+              className={cn("font-medium underline-offset-2 hover:underline break-words", st.link)}
             >
-              <span className="min-w-0">{s.title}</span>
-              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              <span className="align-middle">{s.title}</span>
+              <ExternalLink
+                className="h-3.5 w-3.5 align-middle inline-block opacity-70 ml-0.5 shrink-0"
+                data-print-hide
+                aria-hidden
+              />
             </a>
             {s.validationStatus || typeof s.confidence === "number" ? (
               <p className="text-xs mt-1">

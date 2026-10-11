@@ -1,8 +1,8 @@
-// Core types for the LabMind experiment plan.
+// Core types for the CruxAI experiment plan.
 export type Difficulty = "Beginner" | "Intermediate" | "Advanced";
 export type NoveltySignal = "not_found" | "similar_exists" | "exact_match";
 export type MaterialCategory = "Reagent" | "Equipment" | "Consumable";
-export type PhaseType = "preparation" | "treatment" | "analysis" | "measurement";
+export type PhaseType = "preparation" | "treatment" | "analysis" | "measurement" | "storage";
 
 export interface HypothesisAnalysis {
   intervention: string;

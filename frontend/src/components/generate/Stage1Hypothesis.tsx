@@ -1,56 +1,29 @@
-import { useEffect, useState } from "react";
 import { Loader2, CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useGenerateStore } from "@/lib/generateStore";
 
 interface Props {
-  hypothesis: string;
   onComplete: () => void;
+  /** When true, analysis is stopped — user is editing the hypothesis. */
+  suspended?: boolean;
 }
 
-interface Analysis {
-  intervention: string;
-  outcome: string;
-  mechanism: string;
-  control: string;
-}
-
-function analyzeHypothesis(h: string): Analysis {
-  // Lightweight heuristic extraction (mock — real version would call LLM)
-  const lower = h.toLowerCase();
-  const interventionMatch =
-    h.match(/replacing\s+([^.]+?)\s+(?:with|as)/i) ||
-    h.match(/(?:supplementation|treatment|use)\s+of\s+([^.]+?)(?:\s+for|\s+will|,)/i) ||
-    h.match(/^([A-Z][^.]+?)\s+will/);
-  const outcomeMatch = h.match(
-    /will\s+(increase|decrease|reduce|improve|achieve|detect)\s+([^.]+?)(?:\s+by|\s+within|\s+compared|\.|$)/i,
-  );
-  const controlMatch = h.match(/compared\s+(?:to|with)\s+([^.]+?)(?:\.|$)/i);
-
-  return {
-    intervention: interventionMatch?.[1]?.trim() || h.split(/\s+/).slice(0, 8).join(" ") + "…",
-    outcome: outcomeMatch
-      ? `${outcomeMatch[1]} ${outcomeMatch[2]}`.trim()
-      : "quantitative endpoint detected",
-    mechanism:
-      lower.includes("because") || lower.includes("via")
-        ? "Explicit mechanism stated"
-        : "Implicit biophysical mechanism — protective/binding/catalytic interaction",
-    control: controlMatch?.[1]?.trim() || "Standard-of-care baseline (implied)",
-  };
-}
-
-export function Stage1Hypothesis({ hypothesis, onComplete }: Props) {
-  const [loading, setLoading] = useState(true);
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setAnalysis(analyzeHypothesis(hypothesis));
-      setLoading(false);
-    }, 1500);
-    return () => clearTimeout(t);
-  }, [hypothesis]);
+export function Stage1Hypothesis({ onComplete, suspended = false }: Props) {
+  const loading = useGenerateStore((s) => s.s1Loading);
+  const analysis = useGenerateStore((s) => s.s1Analysis);
+  if (suspended) {
+    return (
+      <div className="rounded-2xl border border-border/80 bg-card/50 backdrop-blur p-8 text-center animate-fade-in">
+        <p className="text-sm text-muted-foreground">
+          Hypothesis is open for editing. Generation is paused.
+        </p>
+        <p className="text-sm text-foreground/90 mt-2">
+          Save to apply the text and restart this step, or cancel to continue.
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -121,7 +94,7 @@ export function Stage1Hypothesis({ hypothesis, onComplete }: Props) {
         <Button
           onClick={onComplete}
           size="lg"
-          className="bg-primary-gradient hover:opacity-95 shadow-glow h-12 px-6 rounded-xl group"
+          className="btn-cta h-12 px-6 rounded-xl group"
           data-testid="stage1-run-lit-qc"
         >
           Run Literature QC

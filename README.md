@@ -4,6 +4,8 @@
   when this file and implementation diverge.
 -->
 
+[![Watch the demo video](https://img.shields.io/badge/Watch%20Demo-Video-red?logo=youtube)](https://drive.google.com/file/d/1maUpBxlDiGnwiEHSE9Sk_KbDBoU2KEp7/view?usp=sharing)
+
 # LabMind AI
 
 **Turn a scientific hypothesis into an operationally grounded experiment plan.**
@@ -13,6 +15,15 @@
 [![Backend](https://img.shields.io/badge/backend-Express-000000?logo=express)](https://expressjs.com/)
 [![Frontend](https://img.shields.io/badge/frontend-React%2019-61DAFB?logo=react)](https://react.dev/)
 
+## Live demo
+
+| | Link |
+|---|------|
+| **Web app** (Cloudflare Workers) | [https://tanstack-start-app.labmind.workers.dev](https://tanstack-start-app.labmind.workers.dev) |
+| **API** (Render) | [https://lab-mindai.onrender.com](https://lab-mindai.onrender.com) · [GET `/health`](https://lab-mindai.onrender.com/health) |
+
+Replace these URLs if you deploy under your own Worker / Render service names.
+
 > **Hackathon lineage:** Built around the *AI Scientist* style challenge — compress “hypothesis → runnable lab work” (protocol, materials, budget, timeline, validation) with a literature novelty gate and optional scientist feedback loop.
 
 **Documentation note:** Some authoring prompts ask for extremely long single-file READMEs. This document is **dense and repo-accurate** rather than padded to an arbitrary line count. Split handbooks under `docs/` are **not yet implemented** (TODO).
@@ -20,6 +31,8 @@
 ---
 
 ## Table of contents
+
+**Live demo:** [Web app](https://tanstack-start-app.labmind.workers.dev) · [API](https://lab-mindai.onrender.com) · [`/health`](https://lab-mindai.onrender.com/health)
 
 1. [Overview](#overview)
 2. [Problem statement](#problem-statement)
@@ -133,6 +146,8 @@ Organisations brief specialist labs to estimate **protocol**, **reagents**, **co
 ---
 
 ## Screenshots & demo
+
+**Hosted demo:** [Web app](https://tanstack-start-app.labmind.workers.dev) · [API](https://lab-mindai.onrender.com) · [`GET /health`](https://lab-mindai.onrender.com/health) (see [Live demo](#live-demo) at the top of this README).
 
 | Asset | Status |
 |-------|--------|
@@ -392,11 +407,14 @@ If `DATABASE_URL` is **unset**, reviews use `backend/data/labmind.sqlite` with t
 
 ## Deployment notes
 
+**Free step-by-step deploy** (Render API + Cloudflare frontend, no Vercel required): **[`DEPLOY.md`](./DEPLOY.md)** at the repository root.
+
 | Target | Guidance |
 |--------|----------|
-| **Frontend** | Build static/client bundle via `npm run build`; TanStack Start / Cloudflare plugin may target Workers — follow `frontend/vite.config.ts` and provider docs. **Verify** env vars (`VITE_*`) at build time. |
-| **Backend** | Run `node src/server.js` behind a process manager; set `PORT`; configure secrets via platform secret store; enable HTTPS termination at reverse proxy. |
-| **AWS / GCP / Azure / Railway / Render** | **Not** codified in-repo — standard Node container or native Node runtime; add health check on `GET /health`. |
+| **Frontend (this repo)** | `npm run build` in `frontend/` targets **Cloudflare Workers** (`wrangler`, `dist/server`). Prefer **Cloudflare** for zero-config match, or migrate the Vite stack for **Vercel** per [`DEPLOY.md`](./DEPLOY.md). |
+| **Backend** | Run `node src/server.js` on a **Node** host (Railway, Render, Fly, Cloud Run, …); set `PORT` and secrets; health check `GET /health`. |
+| **Vercel** | **Not** a one-click match today because the Lovable/TanStack preset builds for **Cloudflare** — see [`DEPLOY.md`](./DEPLOY.md) → *Deploying the frontend on Vercel*. |
+| **AWS / GCP / Azure** | Standard container / VM deployment for `backend/`; same `DEPLOY.md` backend section applies. |
 
 ---
 
@@ -644,6 +662,7 @@ erDiagram
 - Express `try/catch` per route with JSON `{ error, requestId?, details? }`.
 - Frontend: error boundaries / toast patterns depend on route implementation — see `router.tsx` and stage components for user-visible failures.
 - Model **429** handling with selective backoff parsing in `server.js` (`parse429SuggestedWaitMs`).
+- Stage 3 plan generation can fail when upstream API quota is exhausted (`429`) or model/retrieval services are unavailable; the UI then offers **Use mock plan anyway**. Expect roughly **7-8 seconds** before that fallback appears because Stage 3 first runs the loading sequence before surfacing the fallback path.
 
 ---
 
@@ -710,6 +729,7 @@ erDiagram
 | `502` All models failed (strict) | Groq + Gemini both down | Check keys, quotas, model IDs. |
 | `422` procurement / governance / safety (strict) | Gate failed | Inspect response `errors` / `warnings`; widen retrieval or fix hypothesis scope. |
 | Stage 3 empty or generic | Keys missing or resilient stub | Check `metadata.planningModel` and `releaseDegraded`. |
+| Stage 3 fails when APIs are rate-limited / down | Upstream quota reached or service outage | Wait for the Stage 3 loading cycle (~7-8s), then click **Use mock plan anyway** to generate a fallback mock plan and continue demoing the app. |
 | UI crash on reasoning | Stale cached plan without `reasoning` | Regenerate plan; backend now normalises `plan.reasoning`. |
 | Postgres connection errors | Wrong `DATABASE_URL` | Match `docker-compose.yml` credentials. |
 | Playwright fails to start | Port 4173 busy / server | Set `PLAYWRIGHT_BASE_URL` or free port per `playwright.config.ts`. |

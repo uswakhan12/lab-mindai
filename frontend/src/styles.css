@@ -4,6 +4,7 @@
 @import "./print.css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant light (&:is(.light *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -31,6 +32,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* Research accent ramp — use for wayfinding, not loud UI */
+  --color-lab-teal: var(--lab-teal);
+  --color-lab-violet: var(--lab-violet);
+  --color-lab-amber: var(--lab-amber);
+  --color-lab-rose: var(--lab-rose);
   --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, sans-serif;
 }
@@ -55,87 +61,150 @@
 :root {
   --radius: 0.75rem;
 
-  /* LabMind — deep navy base */
-  --background: oklch(0.19 0.04 265);
-  --foreground: oklch(0.98 0.005 250);
+  /* Dark: layered hue story — indigo base, violet cards, cyan-teal secondary (not all one blue) */
+  --background: oklch(0.24 0.07 255);
+  --foreground: oklch(0.98 0.02 255);
 
-  --card: oklch(0.23 0.04 265);
-  --card-foreground: oklch(0.98 0.005 250);
+  /* Slightly more violet than page — separates surfaces */
+  --card: oklch(0.3 0.09 280);
+  --card-foreground: oklch(0.98 0.02 255);
 
-  --popover: oklch(0.23 0.04 265);
-  --popover-foreground: oklch(0.98 0.005 250);
+  --popover: oklch(0.3 0.09 280);
+  --popover-foreground: oklch(0.98 0.02 255);
 
-  /* Electric blue */
-  --primary: oklch(0.65 0.2 255);
-  --primary-foreground: oklch(0.98 0.005 250);
-  --primary-glow: oklch(0.75 0.18 250);
+  /* Primary: blue-cyan (keeps CTAs legible) */
+  --primary: oklch(0.7 0.2 255);
+  --primary-foreground: oklch(0.99 0.01 255);
+  --primary-glow: oklch(0.78 0.18 250);
 
-  --secondary: oklch(0.28 0.04 265);
-  --secondary-foreground: oklch(0.98 0.005 250);
+  /* Cool teal secondary vs violet-leaning card */
+  --secondary: oklch(0.32 0.1 200);
+  --secondary-foreground: oklch(0.98 0.02 250);
 
-  --muted: oklch(0.26 0.035 265);
-  --muted-foreground: oklch(0.72 0.02 255);
+  /* Muted: blue-green stone — reads distinct from indigo background */
+  --muted: oklch(0.3 0.05 220);
+  --muted-foreground: oklch(0.8 0.04 255);
 
-  --accent: oklch(0.32 0.06 260);
-  --accent-foreground: oklch(0.98 0.005 250);
+  /* Accent: soft violet (chips, hovers) */
+  --accent: oklch(0.35 0.11 290);
+  --accent-foreground: oklch(0.98 0.02 250);
 
-  --destructive: oklch(0.62 0.24 27);
-  --destructive-foreground: oklch(0.98 0.005 250);
+  --destructive: oklch(0.65 0.24 25);
+  --destructive-foreground: oklch(0.99 0.01 250);
 
-  --border: oklch(0.32 0.04 265);
-  --input: oklch(0.28 0.04 265);
-  --ring: oklch(0.65 0.2 255);
+  --border: oklch(0.42 0.08 270);
+  --input: oklch(0.34 0.07 270);
+  --ring: oklch(0.7 0.2 255);
 
-  /* Gradients & effects */
-  --gradient-hero: radial-gradient(ellipse at top, oklch(0.35 0.15 260 / 0.4), transparent 60%);
-  --gradient-primary: linear-gradient(135deg, oklch(0.65 0.2 255), oklch(0.72 0.18 245));
-  --gradient-text: linear-gradient(135deg, oklch(0.98 0.005 250), oklch(0.78 0.12 255));
-  --shadow-glow: 0 0 40px oklch(0.65 0.2 255 / 0.35);
-  --shadow-elegant: 0 20px 60px -20px oklch(0.1 0.04 265 / 0.6);
-  --grid-color: oklch(0.3 0.04 265 / 0.4);
+  /* High-chroma lab accents (clearly read as teal / violet / amber / rose) */
+  --lab-teal: oklch(0.75 0.16 195);
+  --lab-violet: oklch(0.75 0.2 300);
+  --lab-amber: oklch(0.86 0.16 80);
+  --lab-rose: oklch(0.78 0.16 5);
+
+  /* Hero wash: blue + indigo + rose/warm (complements cool base) */
+  --gradient-hero:
+    radial-gradient(ellipse 100% 80% at 0% 0%, rgba(59, 130, 246, 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse 90% 70% at 100% 0%, rgba(167, 139, 250, 0.22) 0%, transparent 50%),
+    radial-gradient(ellipse 75% 55% at 30% 100%, rgba(45, 212, 191, 0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 50% at 100% 70%, rgba(244, 114, 182, 0.1) 0%, transparent 50%);
+  /* CTA: cyan → blue → indigo (depth + saturation) */
+  --gradient-primary: linear-gradient(135deg, #0ea5e9 0%, #2563eb 32%, #4f46e5 68%, #6366f1 100%);
+  --gradient-text: linear-gradient(125deg, #eff6ff, #93c5fd, #a5b4fc, #c7d2fe);
+  --gradient-wordmark: linear-gradient(90deg, #3b82f6, #6366f1, #8b5cf6);
+  --shadow-cta: 0 1px 0 0 rgba(255, 255, 255, 0.2) inset, 0 -1px 0 0 rgba(0, 0, 0, 0.18) inset,
+    0 8px 28px -6px rgba(37, 99, 235, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07) inset;
+  --shadow-cta-hover: 0 1px 0 0 rgba(255, 255, 255, 0.28) inset, 0 10px 36px -6px rgba(59, 130, 246, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  --shadow-glow: 0 0 50px rgba(59, 130, 246, 0.38);
+  --shadow-elegant: 0 20px 60px -20px rgba(15, 23, 42, 0.75);
+  /* Subtle grid on top of the mesh; neutral so it works on all hues */
+  --grid-color: oklch(0.6 0.04 255 / 0.22);
+
+  /* Full-page mesh: indigo / violet / teal / amber / rose (dark = low-L oklch glazes) */
+  --body-mesh:
+    radial-gradient(ellipse 75% 58% at 4% 6%, oklch(0.5 0.18 220 / 0.35) 0%, transparent 52%),
+    radial-gradient(ellipse 70% 55% at 98% 4%, oklch(0.48 0.2 305 / 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 50% at 0% 100%, oklch(0.45 0.14 175 / 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse 85% 55% at 100% 92%, oklch(0.5 0.12 80 / 0.2) 0%, transparent 52%),
+    radial-gradient(ellipse 55% 40% at 100% 35%, oklch(0.45 0.12 10 / 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 8% 45%, oklch(0.4 0.1 300 / 0.1) 0%, transparent 55%),
+    linear-gradient(140deg, oklch(0.26 0.09 255) 0%, oklch(0.23 0.08 285) 38%, oklch(0.25 0.08 200) 72%, oklch(0.24 0.07 320) 100%);
 }
 
 .light {
-  --background: oklch(0.985 0.004 250);
-  --foreground: oklch(0.22 0.03 260);
+  /* Warm-cool mix: paper with a trace of green-gold, not flat printer white */
+  --background: oklch(0.97 0.02 100);
+  --foreground: oklch(0.28 0.06 270);
 
-  --card: oklch(0.995 0.002 250);
-  --card-foreground: oklch(0.22 0.03 260);
+  --card: oklch(0.99 0.01 255);
+  --card-foreground: oklch(0.28 0.06 270);
 
-  --popover: oklch(0.995 0.002 250);
-  --popover-foreground: oklch(0.22 0.03 260);
+  --popover: oklch(0.99 0.01 255);
+  --popover-foreground: oklch(0.28 0.06 270);
 
-  --primary: oklch(0.58 0.19 255);
-  --primary-foreground: oklch(0.985 0.004 250);
-  --primary-glow: oklch(0.67 0.15 250);
+  --primary: oklch(0.5 0.22 255);
+  --primary-foreground: oklch(0.99 0.01 255);
+  --primary-glow: oklch(0.6 0.2 255);
 
-  --secondary: oklch(0.94 0.01 250);
-  --secondary-foreground: oklch(0.24 0.03 260);
+  --secondary: oklch(0.92 0.06 200);
+  --secondary-foreground: oklch(0.3 0.08 255);
 
-  --muted: oklch(0.95 0.01 250);
-  --muted-foreground: oklch(0.5 0.03 255);
+  /* Muted: lavender stone */
+  --muted: oklch(0.94 0.03 285);
+  --muted-foreground: oklch(0.45 0.05 260);
 
-  --accent: oklch(0.92 0.03 255);
-  --accent-foreground: oklch(0.24 0.03 260);
+  /* Accent: fresh minty wash */
+  --accent: oklch(0.92 0.06 195);
+  --accent-foreground: oklch(0.3 0.08 255);
 
-  --destructive: oklch(0.6 0.2 27);
-  --destructive-foreground: oklch(0.98 0.005 250);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0.01 250);
 
-  --border: oklch(0.86 0.015 250);
-  --input: oklch(0.98 0.004 250);
-  --ring: oklch(0.58 0.19 255);
+  --border: oklch(0.88 0.04 260);
+  --input: oklch(0.99 0.01 250);
+  --ring: oklch(0.5 0.22 255);
 
-  --gradient-hero: radial-gradient(ellipse at top, oklch(0.72 0.1 255 / 0.2), transparent 60%);
-  --gradient-primary: linear-gradient(135deg, oklch(0.58 0.19 255), oklch(0.66 0.15 245));
-  --gradient-text: linear-gradient(135deg, oklch(0.28 0.04 260), oklch(0.52 0.13 255));
-  --shadow-glow: 0 0 30px oklch(0.58 0.19 255 / 0.2);
-  --shadow-elegant: 0 20px 50px -25px oklch(0.35 0.05 250 / 0.22);
-  --grid-color: oklch(0.82 0.01 250 / 0.7);
+  --lab-teal: oklch(0.45 0.14 195);
+  --lab-violet: oklch(0.48 0.2 300);
+  --lab-amber: oklch(0.55 0.16 80);
+  --lab-rose: oklch(0.5 0.16 5);
+
+  --gradient-hero:
+    radial-gradient(ellipse 100% 80% at 0% 0%, rgba(37, 99, 235, 0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 90% 70% at 100% 0%, rgba(139, 92, 246, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 85% 60% at 0% 100%, rgba(20, 184, 166, 0.1) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 85%, rgba(251, 191, 36, 0.12) 0%, transparent 50%);
+  --gradient-primary: linear-gradient(135deg, #0284c7 0%, #1d4ed8 40%, #4338ca 100%);
+  --gradient-text: linear-gradient(125deg, #1e3a8a, #1d4ed8, #4338ca, #4f46e5);
+  --gradient-wordmark: linear-gradient(90deg, #1d4ed8, #4f46e5, #6366f1);
+  --shadow-cta: 0 1px 0 0 rgba(255, 255, 255, 0.7) inset, 0 1px 2px rgba(0, 0, 0, 0.06) inset,
+    0 6px 20px -4px rgba(37, 99, 235, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  --shadow-cta-hover: 0 1px 0 0 rgba(255, 255, 255, 0.85) inset, 0 8px 24px -4px rgba(37, 99, 235, 0.4);
+  --shadow-glow: 0 0 40px rgba(37, 99, 235, 0.22);
+  --shadow-elegant: 0 20px 50px -25px rgba(30, 64, 175, 0.2);
+  --grid-color: oklch(0.55 0.04 280 / 0.28);
+
+  /* Light mesh: same hue story, airy pastels (high L, soft chroma) */
+  --body-mesh:
+    radial-gradient(ellipse 80% 60% at 2% 4%, oklch(0.9 0.1 220 / 0.55) 0%, transparent 55%),
+    radial-gradient(ellipse 75% 55% at 100% 0%, oklch(0.9 0.1 300 / 0.45) 0%, transparent 52%),
+    radial-gradient(ellipse 85% 60% at 0% 100%, oklch(0.92 0.08 165 / 0.42) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 100% 95%, oklch(0.9 0.1 50 / 0.4) 0%, transparent 50%),
+    radial-gradient(ellipse 65% 45% at 100% 38%, oklch(0.88 0.08 20 / 0.2) 0%, transparent 52%),
+    radial-gradient(ellipse 50% 40% at 20% 55%, oklch(0.9 0.05 300 / 0.25) 0%, transparent 55%),
+    linear-gradient(160deg, #e0f0ff 0%, #f2faf6 32%, #f5f0ff 58%, #fff5eb 100%);
 }
 
 /* Light-mode readability overrides for warm/success accents */
 .light .text-amber-300 { color: #92400e !important; }
 .light .text-amber-400 { color: #b45309 !important; }
+/* Opacity suffixes don’t match `.text-amber-400` — force readable brown, not pale yellow */
+.light .text-amber-400\/80,
+.light .text-amber-400\/85,
+.light .text-amber-300\/90 {
+  color: rgba(120, 53, 15, 0.92) !important;
+}
 .light .text-amber-200 { color: #92400e !important; }
 .light .text-amber-100\/90 { color: #78350f !important; }
 .light .bg-amber-500\/5 { background-color: rgba(245, 158, 11, 0.12) !important; }
@@ -144,6 +213,14 @@
 
 .light .text-emerald-300 { color: #065f46 !important; }
 .light .text-emerald-400 { color: #047857 !important; }
+
+.light .text-teal-300 { color: #0f766e !important; }
+.light .text-teal-400 { color: #0d9488 !important; }
+.light .text-violet-300 { color: #5b21b6 !important; }
+.light .text-violet-400 { color: #6d28d9 !important; }
+.light .text-violet-500\/20 { color: rgba(91, 33, 182, 0.35) !important; }
+.light .text-teal-500\/20 { color: rgba(15, 118, 110, 0.35) !important; }
+.light .text-emerald-500\/20 { color: rgba(4, 120, 87, 0.35) !important; }
 .light .bg-emerald-500\/5 { background-color: rgba(16, 185, 129, 0.12) !important; }
 .light .bg-emerald-500\/15 { background-color: rgba(16, 185, 129, 0.18) !important; }
 .light .border-emerald-500\/30,
@@ -178,12 +255,23 @@
     scroll-behavior: smooth;
   }
 
+  /* Full-app mesh: var(--body-mesh) in :root / .light — multi-hue, balanced in each mode */
   body {
-    background-color: var(--color-background);
+    min-height: 100vh;
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     font-feature-settings: "cv11", "ss01";
+    /* Solid fallback, then paint mesh (first layer in list = top) */
+    background-color: var(--color-background);
+    background-image: var(--body-mesh);
+    background-attachment: fixed;
+  }
+
+  html.light body {
+    background-color: #f4f0ea;
+    background-image: var(--body-mesh);
+    background-attachment: fixed;
   }
 
   h1, h2, h3, h4 {
@@ -209,13 +297,94 @@
     background-clip: text;
     color: transparent;
   }
+  .text-gradient-wordmark {
+    background: var(--gradient-wordmark);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
   .bg-primary-gradient {
     background: var(--gradient-primary);
+  }
+  /* Primary action buttons: glass top edge + deep glow (see --shadow-cta) */
+  .btn-cta {
+    background: var(--gradient-primary);
+    color: var(--color-primary-foreground);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--shadow-cta);
+    transition: filter 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  .btn-cta:hover {
+    filter: brightness(1.06) saturate(1.05);
+    box-shadow: var(--shadow-cta-hover);
+  }
+  .light .btn-cta {
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+  .ring-stage-teal {
+    @apply border-2 border-teal-500/55 bg-teal-500/10 text-teal-300;
+  }
+  .ring-stage-violet {
+    @apply border-2 border-violet-500/55 bg-violet-500/10 text-violet-300;
+  }
+  .ring-stage-blue {
+    @apply border-2 border-primary bg-primary/10 text-primary;
+  }
+  .light .ring-stage-teal {
+    @apply border-2 border-teal-600/40 bg-teal-600/10 text-teal-800;
+  }
+  .light .ring-stage-violet {
+    @apply border-2 border-violet-600/40 bg-violet-600/10 text-violet-900;
+  }
+  .light .ring-stage-blue {
+    @apply border-2 text-primary;
   }
   .shadow-glow {
     box-shadow: var(--shadow-glow);
   }
   .shadow-elegant {
     box-shadow: var(--shadow-elegant);
+  }
+
+  /* Marketing / in-app: varied section washes (complementary hues) */
+  html.dark .app-section-surface-b {
+    background:
+      radial-gradient(ellipse 95% 75% at 12% 25%, oklch(0.5 0.15 300 / 0.2) 0%, transparent 58%),
+      radial-gradient(ellipse 85% 60% at 100% 75%, oklch(0.45 0.1 200 / 0.16) 0%, transparent 55%);
+  }
+  html.light .app-section-surface-b {
+    background:
+      radial-gradient(ellipse 95% 75% at 8% 20%, oklch(0.88 0.08 50 / 0.5) 0%, transparent 58%),
+      radial-gradient(ellipse 85% 60% at 100% 70%, oklch(0.9 0.05 280 / 0.42) 0%, transparent 55%);
+  }
+  html.dark .app-section-surface-c {
+    background:
+      radial-gradient(ellipse 90% 70% at 100% 15%, oklch(0.45 0.12 15 / 0.12) 0%, transparent 52%),
+      radial-gradient(ellipse 100% 80% at 0% 90%, oklch(0.4 0.12 200 / 0.16) 0%, transparent 58%);
+  }
+  html.light .app-section-surface-c {
+    background:
+      radial-gradient(ellipse 90% 70% at 100% 10%, oklch(0.9 0.04 20 / 0.4) 0%, transparent 52%),
+      radial-gradient(ellipse 100% 80% at 0% 100%, oklch(0.9 0.05 200 / 0.4) 0%, transparent 58%);
+  }
+  /* Generate flow: distinct cool lab strip */
+  html.dark .app-page-generate {
+    background:
+      radial-gradient(ellipse 100% 90% at 50% 0%, oklch(0.38 0.12 255 / 0.2) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 50% at 0% 100%, oklch(0.35 0.1 200 / 0.12) 0%, transparent 50%);
+  }
+  html.light .app-page-generate {
+    background:
+      radial-gradient(ellipse 100% 80% at 50% 0%, oklch(0.92 0.04 255 / 0.6) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 50% at 0% 100%, oklch(0.92 0.05 200 / 0.45) 0%, transparent 50%);
+  }
+  /* Footer: subtle cap distinct from main scroll */
+  html.dark .app-footer-surface {
+    background: linear-gradient(180deg, transparent 0%, oklch(0.22 0.06 270) 100%);
+    border-color: color-mix(in oklch, var(--color-border) 80%, oklch(0.5 0.1 200));
+  }
+  html.light .app-footer-surface {
+    background: linear-gradient(180deg, transparent 0%, oklch(0.96 0.02 270) 100%);
+    border-color: color-mix(in oklch, var(--color-border) 90%, oklch(0.7 0.04 200));
   }
 }
