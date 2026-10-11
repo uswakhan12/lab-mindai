@@ -7,13 +7,13 @@ import { Footer } from "@/components/Footer";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "LabMind AI — From Hypothesis to Runnable Experiment in Minutes" },
+      { title: "CruxAI — From Hypothesis to Runnable Experiment in Minutes" },
       {
         name: "description",
         content:
           "AI that thinks like a senior scientist. Generate complete, operationally grounded experiment plans — protocol, materials, budget, timeline.",
       },
-      { property: "og:title", content: "LabMind AI — Scientific Experiment Planning" },
+      { property: "og:title", content: "CruxAI — Scientific Experiment Planning" },
       {
         property: "og:description",
         content: "Turn any hypothesis into a runnable experiment plan in minutes.",
@@ -40,7 +40,7 @@ function Index() {
             <span className="text-gradient">disciplines</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            From cryobiology to carbon capture — try a sample hypothesis above to see LabMind in
+            From cryobiology to carbon capture — try a sample hypothesis above to see CruxAI in
             action.
           </p>
         </section>
@@ -52,7 +52,7 @@ function Index() {
             Built by scientists, for scientists
           </h2>
           <p className="text-muted-foreground leading-relaxed">
-            LabMind is an AI co-scientist trained on protocols, methods papers, and operational
+            CruxAI is an AI co-scientist trained on protocols, methods papers, and operational
             knowledge from working research labs. We don't replace judgement — we accelerate the
             grunt work between idea and bench.
           </p>

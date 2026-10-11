@@ -3,7 +3,7 @@ import { analyzeHypothesis } from "@/lib/analyzeHypothesis";
 import { fetchModelGeneratedPlan } from "@/lib/fetchModelGeneratedPlan";
 import { useGenerateStore } from "@/lib/generateStore";
 import type { LiteratureQCResult } from "@/lib/generateTypes";
-import { addToHistory, labmindApiHeaders } from "@/lib/storage";
+import { addToHistory, cruxApiHeaders } from "@/lib/storage";
 import { PLAN_LOADING_STEPS } from "@/lib/planLoadingSteps";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
@@ -119,7 +119,7 @@ export function GeneratePipelineRunner() {
       try {
         const response = await fetch(`${BACKEND_URL}/api/literature-qc`, {
           method: "POST",
-          headers: labmindApiHeaders(),
+          headers: cruxApiHeaders(),
           body: JSON.stringify({ hypothesis: sessionKey }),
           signal: ac.signal,
         });

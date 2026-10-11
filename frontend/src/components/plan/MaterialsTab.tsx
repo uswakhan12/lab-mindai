@@ -80,7 +80,7 @@ export function MaterialsTab({ plan }: { plan: FullPlan }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "labmind-materials.csv";
+    a.download = "cruxai-materials.csv";
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Materials exported to CSV");

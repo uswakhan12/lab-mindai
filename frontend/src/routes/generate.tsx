@@ -28,8 +28,8 @@ export const Route = createFileRoute("/generate")({
   validateSearch: searchSchema,
   head: () => ({
     meta: [
-      { title: "Generate Experiment Plan — LabMind AI" },
-      { name: "description", content: "Watch LabMind think through your hypothesis step by step." },
+      { title: "Generate Experiment Plan — CruxAI" },
+      { name: "description", content: "Watch CruxAI think through your hypothesis step by step." },
     ],
   }),
   component: GeneratePage,

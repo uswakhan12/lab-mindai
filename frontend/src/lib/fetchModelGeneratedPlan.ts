@@ -2,7 +2,7 @@ import { detectDomain } from "@/lib/plan-generator";
 import {
   fetchReviewsForDomain,
   getReviewsForDomain,
-  labmindApiHeaders,
+  cruxApiHeaders,
 } from "@/lib/storage";
 import type {
   ExecutionReadiness,
@@ -71,7 +71,7 @@ export async function fetchModelGeneratedPlan(
 
   const res = await fetch(`${BACKEND_URL}/api/experiment-plan`, {
     method: "POST",
-    headers: labmindApiHeaders(),
+    headers: cruxApiHeaders(),
     body: JSON.stringify({ hypothesis, domain, priorFeedback }),
     signal,
   });

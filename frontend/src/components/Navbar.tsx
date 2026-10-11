@@ -84,7 +84,7 @@ export function Navbar() {
             <div className="absolute inset-0 blur-md bg-cyan-500/30 -z-10" />
           </div>
           <span className="font-display text-xl font-semibold tracking-tight text-gradient-wordmark">
-            LabMind
+            CruxAI
           </span>
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">

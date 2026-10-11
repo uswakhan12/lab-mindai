@@ -1,10 +1,12 @@
-const THEME_KEY = "labmind:theme";
+const THEME_KEY = "cruxai:theme";
+const LEGACY_THEME_KEY = "labmind:theme";
 
 export type ThemeMode = "dark" | "light";
 
 export function getStoredTheme(): ThemeMode {
   if (typeof window === "undefined") return "dark";
-  const raw = window.localStorage.getItem(THEME_KEY);
+  const raw =
+    window.localStorage.getItem(THEME_KEY) ?? window.localStorage.getItem(LEGACY_THEME_KEY);
   return raw === "light" ? "light" : "dark";
 }
 

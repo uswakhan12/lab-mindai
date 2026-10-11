@@ -1,4 +1,4 @@
-const SFX_KEY = "labmind:sfx";
+const SFX_KEY = "cruxai:sfx";
 
 /** Peak gain for the click (linear 0–1). Previously ~0.05 was inaudible on many systems. */
 const SFX_PEAK_GAIN = 0.32;

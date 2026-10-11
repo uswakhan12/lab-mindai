@@ -61,7 +61,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
             __html: `
               (function () {
                 try {
-                  var t = localStorage.getItem("labmind:theme");
+                  var t = localStorage.getItem("cruxai:theme") || localStorage.getItem("labmind:theme");
                   if (t === "light") {
                     document.documentElement.classList.add("light");
                     document.documentElement.classList.remove("dark");

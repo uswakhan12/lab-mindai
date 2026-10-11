@@ -12,7 +12,7 @@ const steps = [
     icon: BookOpenCheck,
     num: "02",
     title: "Literature QC Check",
-    desc: "LabMind cross-references recent literature, validates novelty, and surfaces methodological gaps.",
+    desc: "CruxAI cross-references recent literature, validates novelty, and surfaces methodological gaps.",
     accent: "violet" as const,
   },
   {

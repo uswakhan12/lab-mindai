@@ -41,11 +41,7 @@ export function Hero() {
         <div className="max-w-3xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 rounded-full border-2 border-cyan-500/40 bg-gradient-to-r from-cyan-500/20 via-violet-500/15 to-fuchsia-500/20 backdrop-blur-md px-4 py-1.5 mb-8 text-xs text-muted-foreground shadow-lg shadow-cyan-500/25">
             <Sparkles className="h-3.5 w-3.5 text-amber-400 dark:text-amber-300 light:text-amber-600" />
-            <span>
-              <span className="text-foreground/90">AI Co-Scientist</span>
-              <span className="text-muted-foreground"> · </span>
-              <span className="text-fuchsia-400 dark:text-fuchsia-300 light:text-fuchsia-800">Powered by Fulcrum Science</span>
-            </span>
+            <span className="text-foreground/90">CruxAI · AI Co-Scientist</span>
           </div>
 
           <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold tracking-tight leading-[1.05] mb-6">
